@@ -3,8 +3,8 @@ main = "src/index.ts"
 compatibility_date = "2025-03-01"
 compatibility_flags = ["nodejs_compat"]
 
-# ── Fill these in after: wrangler whoami ──────────────────────────────────────
-account_id = ""   # from: wrangler whoami
+# account_id is auto-detected in Cloudflare CI. Do NOT set it here.
+# If wrangler asks locally, run: wrangler whoami
 
 # ─── Workers AI ───────────────────────────────────────────────────────────────
 [ai]
@@ -23,97 +23,72 @@ class_name = "SessionDO"
 tag = "v1"
 new_classes = ["AgentDO", "SessionDO"]
 
-# ─── D1 (SQLite database) ─────────────────────────────────────────────────────
+# ─── D1 ───────────────────────────────────────────────────────────────────────
+# Run: wrangler d1 create superagent-db  →  paste id below
 [[d1_databases]]
-binding = "DB"
+binding       = "DB"
 database_name = "superagent-db"
-database_id = ""  # from: wrangler d1 create superagent-db
+database_id   = "REPLACE_WITH_D1_DATABASE_ID"
 
-# ─── R2 (File storage) ────────────────────────────────────────────────────────
+# ─── R2 ───────────────────────────────────────────────────────────────────────
+# Run: wrangler r2 bucket create superagent-files
 [[r2_buckets]]
-binding = "FILES"
+binding     = "FILES"
 bucket_name = "superagent-files"
 
-# ─── Vectorize (Semantic search) ──────────────────────────────────────────────
+# ─── Vectorize ────────────────────────────────────────────────────────────────
+# Run: wrangler vectorize create superagent-knowledge --dimensions=768 --metric=cosine
 [[vectorize]]
-binding = "VECTORIZE"
+binding    = "VECTORIZE"
 index_name = "superagent-knowledge"
 
 # ─── KV Namespaces ────────────────────────────────────────────────────────────
+# Run: wrangler kv namespace create CACHE       →  paste id below
+# Run: wrangler kv namespace create OAUTH_STATES →  paste id below
 [[kv_namespaces]]
 binding = "CACHE"
-id = ""  # from: wrangler kv namespace create CACHE
+id      = "REPLACE_WITH_CACHE_KV_ID"
 
 [[kv_namespaces]]
 binding = "OAUTH_STATES"
-id = ""  # from: wrangler kv namespace create OAUTH_STATES
+id      = "REPLACE_WITH_OAUTH_STATES_KV_ID"
 
 # ─── Workflows ────────────────────────────────────────────────────────────────
 [[workflows]]
-binding = "AUTOMATION_WORKFLOW"
-name = "automation-workflow"
+binding    = "AUTOMATION_WORKFLOW"
+name       = "automation-workflow"
 class_name = "AutomationWorkflow"
 
 # ─── Queues ───────────────────────────────────────────────────────────────────
+# Run: wrangler queues create superagent-tasks
 [[queues.producers]]
 binding = "TASK_QUEUE"
-queue = "superagent-tasks"
+queue   = "superagent-tasks"
 
 [[queues.consumers]]
-queue = "superagent-tasks"
-max_batch_size = 10
+queue             = "superagent-tasks"
+max_batch_size    = 10
 max_batch_timeout = 30
-max_retries = 3
+max_retries       = 3
 
-# ─── Static assets (the UI) ───────────────────────────────────────────────────
+# ─── Static assets ────────────────────────────────────────────────────────────
 [assets]
 directory = "./public"
-binding = "ASSETS"
+binding   = "ASSETS"
 
-# ─── Non-secret environment variables ─────────────────────────────────────────
-# These are safe to commit — no sensitive values here
+# ─── Non-secret vars (safe to commit) ─────────────────────────────────────────
 [vars]
 ENVIRONMENT = "production"
 WORKER_URL  = "https://superagent.YOUR_SUBDOMAIN.workers.dev"
 
-# ─── Secrets ──────────────────────────────────────────────────────────────────
-# ⚠️  DO NOT put secret values here.
-# ⚠️  Values live in .env (gitignored) and are pushed via:
-#        wrangler secret put KEY_NAME
-#     or in bulk:
-#        cat .env | grep -v '^#' | grep '=' | while IFS='=' read k v; do
-#          [ -n "$v" ] && echo "$v" | wrangler secret put "$k"; done
-#
-# Secrets used by this Worker:
-#   ANTHROPIC_API_KEY
-#   CF_ACCESS_TEAM_DOMAIN
-#   CF_ACCESS_AUD
-#   TWILIO_ACCOUNT_SID
-#   TWILIO_AUTH_TOKEN
-#   TWILIO_WHATSAPP_NUMBER
-#   GITHUB_CLIENT_ID        GITHUB_CLIENT_SECRET
-#   GOOGLE_CLIENT_ID        GOOGLE_CLIENT_SECRET
-#   SLACK_CLIENT_ID         SLACK_CLIENT_SECRET
-#   LINKEDIN_CLIENT_ID      LINKEDIN_CLIENT_SECRET
-#   NOTION_CLIENT_ID        NOTION_CLIENT_SECRET
-#   SALESFORCE_CLIENT_ID    SALESFORCE_CLIENT_SECRET
-#   STRIPE_CLIENT_ID        STRIPE_CLIENT_SECRET
-#   AIRTABLE_CLIENT_ID      AIRTABLE_CLIENT_SECRET
-#   HUBSPOT_CLIENT_ID       HUBSPOT_CLIENT_SECRET
-
 # ─── Cron triggers ────────────────────────────────────────────────────────────
 [triggers]
 crons = [
-  "0 8 * * 1",    # Mon 8am  — LinkedIn review
-  "0 9 * * *",    # Daily 9am — Slack summary
-  "0 8 * * *",    # Daily 8am — Morning briefing
-  "*/5 * * * *",  # Every 5min — Queue processor
+  "0 9 * * 1",
+  "0 9 * * *",
 ]
 
 # ─── Local dev ────────────────────────────────────────────────────────────────
 [dev]
-port = 8787
+port           = 8787
 local_protocol = "http"
-
-# In dev, load secrets from .env automatically:
-# wrangler dev --env-file .env
