@@ -2,22 +2,20 @@
   "name": "superagent",
   "version": "2.0.0",
   "private": true,
-  "description": "Personal AI Superagent on Cloudflare Workers",
   "scripts": {
-    "dev":         "wrangler dev --env-file .env",
-    "deploy":      "npm run build:ui && wrangler deploy",
-    "deploy:db":   "wrangler d1 execute superagent-db --file=src/db/schema.sql --remote",
-    "build:ui":    "cp public/index.html public/index.html.bak 2>/dev/null; cp la-ui.html public/index.html",
+    "dev":          "wrangler dev --env-file .env",
+    "deploy":       "wrangler deploy",
+    "deploy:db":    "wrangler d1 execute superagent-db --file=src/db/schema.sql --remote",
     "secrets:push": "node scripts/push-secrets.mjs",
-    "logs":        "wrangler tail",
-    "types":       "wrangler types"
+    "logs":         "wrangler tail",
+    "types":        "wrangler types"
   },
   "dependencies": {
-    "hono": "^4.4.0"
+    "hono": "^4.12.8"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250317.0",
-    "typescript": "^5.4.0",
-    "wrangler": "^3.50.0"
+    "@cloudflare/workers-types": "^4.20260317.1",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.76.0"
   }
 }
