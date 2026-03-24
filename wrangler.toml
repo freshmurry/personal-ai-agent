@@ -51,7 +51,7 @@ id      = "042d97e687054c4e8c0102be6f7c8aae"
 
 [[kv_namespaces]]
 binding = "OAUTH_STATES"
-id      = "REPLACE_WITH_OAUTH_STATES_KV_ID"
+id      = "1db5a9038d5c4eca9ef085821a20e562"
 
 # ─── Workflows ────────────────────────────────────────────────────────────────
 [[workflows]]
