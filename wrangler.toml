@@ -28,7 +28,7 @@ new_classes = ["AgentDO", "SessionDO"]
 [[d1_databases]]
 binding       = "DB"
 database_name = "superagent-db"
-database_id   = "REPLACE_WITH_D1_DATABASE_ID"
+database_id   = "768abc87-231f-48bf-9150-3602e099b46c"
 
 # ─── R2 ───────────────────────────────────────────────────────────────────────
 # Run: wrangler r2 bucket create superagent-files
@@ -40,7 +40,7 @@ bucket_name = "superagent-files"
 # Run: wrangler vectorize create superagent-knowledge --dimensions=768 --metric=cosine
 [[vectorize]]
 binding    = "VECTORIZE"
-index_name = "superagent-knowledge"
+index_name = "vector-index"
 
 # ─── KV Namespaces ────────────────────────────────────────────────────────────
 # Run: wrangler kv namespace create CACHE       →  paste id below
