@@ -47,7 +47,7 @@ index_name = "superagent-knowledge"
 # Run: wrangler kv namespace create OAUTH_STATES →  paste id below
 [[kv_namespaces]]
 binding = "CACHE"
-id      = "REPLACE_WITH_CACHE_KV_ID"
+id      = "042d97e687054c4e8c0102be6f7c8aae"
 
 [[kv_namespaces]]
 binding = "OAUTH_STATES"
