@@ -158,85 +158,143 @@ app.post('/api/chat', async (c) => {
     stream?: boolean;
   };
 
-  const FALLBACK_MODELS = [
-    '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
-    '@cf/meta/llama-3.1-8b-instruct',
-    '@cf/mistral/mistral-7b-instruct-v0.1',
-  ];
-
-  const model = body.model || 'claude-sonnet-4-20250514';
+  const model = body.model || '@cf/meta/llama-3.1-8b-instruct-fp8-fast';
   const isClaude = model.startsWith('claude-');
+  const wantStream = body.stream === true;
 
+  // ── Helper: wrap a plain text reply as a minimal SSE stream ───────────────
+  // Workers AI returns a plain string, not SSE. We wrap it so the browser's
+  // streaming reader always gets the same format regardless of model.
+  function textToSSE(text: string, modelName: string): Response {
+    const payload = JSON.stringify({
+      type: 'content_block_delta',
+      delta: { type: 'text_delta', text },
+    });
+    const done = JSON.stringify({ type: 'message_stop' });
+    const body = `data: ${payload}\n\ndata: ${done}\n\ndata: [DONE]\n\n`;
+    return new Response(body, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+        'X-Model': modelName,
+      },
+    });
+  }
+
+  // ── Claude path ────────────────────────────────────────────────────────────
   if (isClaude) {
-    try {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // ✅ Key lives here on the server — never in the browser
-          'x-api-key': c.env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: body.max_tokens || 1000,
-          system: body.system || '',
-          messages: body.messages,
-          stream: body.stream || false,
-        }),
-      });
+    if (!c.env.ANTHROPIC_API_KEY) {
+      // Key not set — fall through to Workers AI instead of returning an error
+      console.warn('[Chat] ANTHROPIC_API_KEY not set, using Workers AI fallback');
+    } else {
+      try {
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': c.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: body.max_tokens || 1000,
+            system: body.system || '',
+            messages: body.messages,
+            stream: wantStream,
+          }),
+        });
 
-      if (resp.ok) {
-        if (body.stream) {
-          // Pass the SSE stream straight through to the browser
-          return new Response(resp.body, {
-            headers: {
-              'Content-Type': 'text/event-stream',
-              'Cache-Control': 'no-cache',
-              'X-Accel-Buffering': 'no',
-            },
-          });
+        if (resp.ok) {
+          if (wantStream) {
+            // Pass SSE stream straight through
+            return new Response(resp.body, {
+              headers: {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',
+              },
+            });
+          }
+          return c.json(await resp.json());
         }
-        const data = await resp.json();
-        return c.json(data);
-      }
 
-      const err = await resp.json() as any;
-      console.error('[Claude]', err);
-      // Fall through to Workers AI
-    } catch (e) {
-      console.warn('[Claude] Failed, trying Workers AI fallback:', e);
+        const err = await resp.json() as any;
+        console.error('[Claude] API error:', resp.status, err?.error?.message);
+        // Fall through to Workers AI
+      } catch (e) {
+        console.warn('[Claude] Network error, falling back to Workers AI:', e);
+      }
     }
   }
 
-  // ── Workers AI fallback ────────────────────────────────────────────────────
-  for (const fallbackModel of FALLBACK_MODELS) {
+  // ── Cloudflare Workers AI ──────────────────────────────────────────────────
+  // Ordered by capability: best first, smallest last.
+  // Includes beta models — these may not be available on all accounts yet;
+  // we try them in sequence and move to the next on failure.
+  const CF_MODELS = model.startsWith('@cf/')
+    ? [model]  // user explicitly chose a CF model — try it first
+    : [
+        '@cf/meta/llama-3.1-8b-instruct-fp8-fast',
+        '@cf/ibm-granite/granite-4.0-h-micro',
+        '@cf/qwen/qwen3-30b-a3b-fp8',
+        '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+        '@cf/meta/llama-3.1-8b-instruct',
+        '@cf/mistral/mistral-7b-instruct-v0.1',
+      ];
+
+  const systemMsg = body.system
+    ? [{ role: 'system' as const, content: body.system }]
+    : [];
+
+  const cfMessages = [
+    ...systemMsg,
+    ...body.messages.map((m: any) => ({
+      role: m.role as 'user' | 'assistant' | 'system',
+      content: typeof m.content === 'string'
+        ? m.content
+        : Array.isArray(m.content)
+          ? m.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n')
+          : JSON.stringify(m.content),
+    })),
+  ];
+
+  for (const cfModel of CF_MODELS) {
     try {
-      const messages = body.system
-        ? [{ role: 'system', content: body.system }, ...body.messages]
-        : body.messages;
-
-      const result = await c.env.AI.run(fallbackModel as any, {
-        messages: messages.map(m => ({
-          role: m.role,
-          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-        })),
+      const result = await c.env.AI.run(cfModel as any, {
+        messages: cfMessages,
         max_tokens: body.max_tokens || 800,
-      });
+      }) as any;
 
-      if ((result as any).response) {
+      const text: string =
+        result?.response ||
+        result?.result?.response ||
+        result?.choices?.[0]?.message?.content ||
+        result?.content ||
+        '';
+
+      if (text) {
+        if (wantStream) {
+          return textToSSE(text, cfModel);
+        }
         return c.json({
-          content: [{ type: 'text', text: (result as any).response }],
-          model: fallbackModel,
+          content: [{ type: 'text', text }],
+          model: cfModel,
           fallback: true,
         });
       }
     } catch (e) {
-      console.warn('[Workers AI] Failed:', fallbackModel, e);
+      console.warn(`[Workers AI] ${cfModel} failed:`, e);
     }
   }
 
-  return c.json({ error: 'All models failed. Please try again.' }, 503);
+  // Last resort — return a visible error so the bubble is never blank
+  const errText = isClaude && !c.env.ANTHROPIC_API_KEY
+    ? '⚠️ No API key configured. Add ANTHROPIC_API_KEY as a Cloudflare secret, or switch to a Cloudflare AI model in Settings → Model.'
+    : '⚠️ All models failed. Check your Cloudflare Workers AI quota and try again.';
+
+  if (wantStream) return textToSSE(errText, 'error');
+  return c.json({ content: [{ type: 'text', text: errText }], error: true }, 200);
 });
 
 // ─── STEP 4: MEMORY API (D1) ──────────────────────────────────────────────────
