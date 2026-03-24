@@ -62,7 +62,7 @@ class_name = "AutomationWorkflow"
 # ─── Queues ───────────────────────────────────────────────────────────────────
 # Run: wrangler queues create superagent-tasks
 [[queues.producers]]
-binding = "TASK_QUEUE"
+binding = "MY_QUEUE"
 queue   = "superagent-tasks"
 
 [[queues.consumers]]
