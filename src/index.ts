@@ -182,6 +182,66 @@ app.post('/api/chat', async (c) => {
     });
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ✅ CHAT (NOW WITH AI SEARCH)
+  // ─────────────────────────────────────────────────────────────────────────────
+  app.post('/api/chat', async (c) => {
+    const allowed = await rateLimit(c.req.raw, c.env, 60);
+    if (!allowed) return c.json({ error: 'Rate limit exceeded' }, 429);
+  
+    const body = await c.req.json();
+  
+    const model = body.model || '@cf/meta/llama-3.1-8b-instruct-fp8-fast';
+    const isClaude = model.startsWith('claude-');
+    const wantStream = body.stream === true;
+  
+    // ─────────────────────────────
+    // 🔍 AI SEARCH (AutoRAG)
+    // ─────────────────────────────
+    let ragContext = '';
+  
+    try {
+      const lastUser = [...body.messages].reverse().find((m:any)=>m.role==='user');
+  
+      if (lastUser) {
+        const query =
+          typeof lastUser.content === 'string'
+            ? lastUser.content
+            : JSON.stringify(lastUser.content);
+  
+        const search = await c.env.AI
+          .autorag("highstreet-it") // ✅ YOUR INDEX
+          .aiSearch({
+            query,
+            model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+            rewrite_query: true,
+            max_num_results: 3,
+            ranking_options: { score_threshold: 0.3 },
+            reranking: {
+              enabled: true,
+              model: "@cf/baai/bge-reranker-base",
+            },
+          }) as any;
+  
+        const results = search?.data || search?.results || [];
+  
+        if (results.length) {
+          ragContext = results
+            .map((r:any,i:number)=>`Source ${i+1}:\n${r.text || r.content || ''}`)
+            .join('\n\n');
+        }
+      }
+    } catch (e) {
+      console.warn('[AutoRAG failed]', e);
+    }
+  
+    // Inject into system
+    const systemWithRAG = `
+  ${body.system || ''}
+  
+  ${ragContext ? `Use the following context:\n\n${ragContext}` : ''}
+  `.trim();
+  
   // ── Claude path ────────────────────────────────────────────────────────────
   if (isClaude) {
     if (!c.env.ANTHROPIC_API_KEY) {
