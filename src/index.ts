@@ -5,7 +5,7 @@ import { cors } from 'hono/cors';
  * SuperAgent — Integrated Worker Controller
  * Source of Truth: D1 Database
  * Storage: R2 Bucket
- * Logic: Cloudflare Workflows, Durable Objects, Vectorize
+ * Logic: Cloudflare Workflows, Vectorize, Queues
  */
 
 type Bindings = {
@@ -16,8 +16,7 @@ type Bindings = {
   AUTOMATION_WORKFLOW: Workflow;
   VECTORIZE: VectorizeIndex;
   MY_QUEUE: Queue;
-  AGENT: DurableObjectNamespace;
-  SESSION: DurableObjectNamespace;
+  SESSION: DurableObjectNamespace; // Kept SessionDO as per wrangler.toml
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_WHATSAPP_NUMBER: string;
@@ -69,6 +68,7 @@ app.post('/api/memory', async (c) => {
   `).bind(key, val, type || 'fact', ts).run();
 
   // B. Vector Embedding (Semantic Search)
+  // This allows the Agent to use "semantic search" as a tool later
   const embedding = await c.env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [val] });
   await c.env.VECTORIZE.upsert([{
     id: key,
@@ -115,10 +115,10 @@ app.get('/api/files/:name', async (c) => {
   return new Response(object.body, { headers });
 });
 
-// 6. DURABLE OBJECT PROXY (For real-time state)
-app.all('/agent/:id/*', async (c) => {
-  const id = c.env.AGENT.idFromName(c.req.param('id'));
-  const obj = c.env.AGENT.get(id);
+// 6. SESSION PROXY (For SessionDO)
+app.all('/session/:id/*', async (c) => {
+  const id = c.env.SESSION.idFromName(c.req.param('id'));
+  const obj = c.env.SESSION.get(id);
   return obj.fetch(c.req.raw);
 });
 
@@ -147,7 +147,6 @@ app.post('/webhook/whatsapp', async (c) => {
   const from = body.From as string;
   const text = body.Body as string;
 
-  // Offload to Queue for async processing to ensure 200 OK to Twilio under 1s
   await c.env.MY_QUEUE.send({
     type: 'whatsapp_message',
     from,
@@ -160,7 +159,7 @@ app.post('/webhook/whatsapp', async (c) => {
   });
 });
 
-// 9. EXPORTS (Standard Fetch + Cron + Queue)
+// 9. EXPORTS
 export default {
   fetch: app.fetch,
 
@@ -185,7 +184,6 @@ export default {
       const data = message.body;
       
       if (data.type === 'whatsapp_message') {
-        // Trigger the workflow from the queue consumer
         await env.AUTOMATION_WORKFLOW.create({
           params: { 
             trigger: 'whatsapp', 
