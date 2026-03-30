@@ -1,10 +1,13 @@
 import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from 'cloudflare:workers';
+import { Connectors } from './connectors';
+import { BrowserTool } from './tools/browser';
 
 interface Params {
   trigger: string;
   instructions?: string;
   payload?: any;
   notify?: string;
+  persona?: string; // Injected by index.ts Memory Service
 }
 
 export class AutomationWorkflow extends WorkflowEntrypoint<{ 
@@ -12,107 +15,97 @@ export class AutomationWorkflow extends WorkflowEntrypoint<{
   VECTORIZE: VectorizeIndex, 
   FILES: R2Bucket,
   AI: any,
-  ANTHROPIC_API_KEY: string 
+  ANTHROPIC_API_KEY: string,
+  BRAVE_API_KEY: string,
+  LINKEDIN_CLIENT_ID: string,
+  LINKEDIN_CLIENT_SECRET: string
 }, Params> {
   
   async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
-    const { trigger, instructions, payload } = event.payload;
-    
-    // Initial Context including the user's Persona/Knowledge from D1
-    const context = await step.do('get-context', async () => {
-      const identity = await this.env.DB.prepare("SELECT val FROM memory WHERE type = 'identity' LIMIT 1").first('val');
-      return {
-        now: new Date().toISOString(),
-        persona: identity || "A helpful personal assistant.",
-        user_payload: payload
-      };
+    const { trigger, instructions, payload, persona } = event.payload;
+    const now = new Date().toLocaleString();
+
+    // 1. UX STEP: Immediate "Thinking" status in D1 for the UI/WhatsApp to see
+    await step.do('set-initial-status', async () => {
+      await this.env.DB.prepare(
+        "INSERT INTO conversations (role, content, ts, summary) VALUES ('system', 'Agent is analyzing your request...', ?, 1)"
+      ).bind(Date.now()).run();
     });
 
-    let sessionMessages: any[] = [
-      { 
-        role: 'system', 
-        content: `You are an autonomous SuperAgent. 
-        Current Time: ${context.now}
-        User Persona: ${context.persona}
-        Trigger: ${trigger}
-        
-        Guidelines:
-        1. Use tools to gather facts before answering.
-        2. If you need to generate an image, use the generate_image tool.
-        3. If you need to search the web, use search_web.
-        4. If you need to send an email or post to LinkedIn, use the respective tools.`
-      },
-      { role: 'user', content: instructions || "Process current trigger." }
-    ];
+    // 2. ROUTER: Cheap Llama-3.1-8b Classification
+    const route = await step.do('router-logic', async () => {
+      const response = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        messages: [
+          { 
+            role: 'system', 
+            content: 'Classify as "SIMPLE" (time, greetings) or "COMPLEX" (tools, research, social, email). Return one word.' 
+          },
+          { role: 'user', content: instructions || "" }
+        ]
+      });
+      return response.response.toUpperCase().includes('COMPLEX') ? 'COMPLEX' : 'SIMPLE';
+    });
 
+    if (route === 'SIMPLE') {
+      return await step.do('handle-simple', async () => {
+        const result = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+          messages: [
+            { role: 'system', content: `Identity: ${persona}. Time: ${now}. Answer briefly.` },
+            { role: 'user', content: instructions || "" }
+          ]
+        });
+        await this.env.DB.prepare("INSERT INTO conversations (role, content, ts) VALUES ('assistant', ?, ?)")
+          .bind(result.response, Date.now()).run();
+        return result.response;
+      });
+    }
+
+    // 3. DYNAMIC TOOL DEFINITIONS
     const tools = [
       {
-        name: "get_date_time",
-        description: "Returns the current accurate date and time.",
-        input_schema: { type: "object", properties: {} }
-      },
-      {
         name: "search_knowledge",
-        description: "Search your internal Vectorize memory for past conversations, facts, and preferences.",
-        input_schema: {
-          type: "object",
-          properties: { query: { type: "string" } },
-          required: ["query"]
-        }
+        description: "Search internal long-term memory and persona facts.",
+        input_schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] }
       },
       {
         name: "search_web",
-        description: "Search the internet for real-time information.",
-        input_schema: {
-          type: "object",
-          properties: { query: { type: "string" } },
-          required: ["query"]
-        }
-      },
-      {
-        name: "generate_image",
-        description: "Generate a visual image based on a prompt.",
-        input_schema: {
-          type: "object",
-          properties: { prompt: { type: "string" } },
-          required: ["prompt"]
-        }
+        description: "Search the live internet for news and real-time facts.",
+        input_schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] }
       },
       {
         name: "send_email",
-        description: "Send an email on behalf of the user.",
-        input_schema: {
-          type: "object",
-          properties: { 
-            to: { type: "string" }, 
-            subject: { type: "string" }, 
-            body: { type: "string" } 
-          },
+        description: "Send a formal email.",
+        input_schema: { 
+          type: "object", 
+          properties: { to: { type: "string" }, subject: { type: "string" }, body: { type: "string" } },
           required: ["to", "subject", "body"]
         }
       },
       {
         name: "post_linkedin",
-        description: "Draft and schedule a LinkedIn post.",
-        input_schema: {
-          type: "object",
-          properties: { content: { type: "string" } },
-          required: ["content"]
-        }
+        description: "Post an update to LinkedIn.",
+        input_schema: { type: "object", properties: { content: { type: "string" } }, required: ["content"] }
       }
     ];
 
+    // 4. COMPLEX AGENTIC LOOP (Claude 3.5 Sonnet)
+    let sessionMessages: any[] = [
+      { role: 'user', content: instructions || "Execute." }
+    ];
+
+    const systemPrompt = `You are an Autonomous SuperAgent.
+    User Persona: ${persona}
+    Time: ${now}
+    Trigger: ${trigger}
+    Goal: Use tools to fulfill the user request precisely.`;
+
     let isThinking = true;
     let iteration = 0;
-    const MAX_ITERATIONS = 5;
-
-    while (isThinking && iteration < MAX_ITERATIONS) {
+    
+    while (isThinking && iteration < 5) {
       iteration++;
 
-      // STEP 1: THINK (Prefer Llama for simple tool selection, fallback to Anthropic)
-      const aiResponse = await step.do(`ai-thought-${iteration}`, async () => {
-        // We use Anthropic here as the "Primary Brain" for tool accuracy on paid plan
-        // But you can swap this for a Workers AI call to save money
+      const aiResponse = await step.do(`thought-loop-${iteration}`, async () => {
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -123,74 +116,65 @@ export class AutomationWorkflow extends WorkflowEntrypoint<{
           body: JSON.stringify({
             model: 'claude-3-5-sonnet-latest',
             max_tokens: 1024,
-            messages: sessionMessages.filter(m => m.role !== 'system'),
-            system: sessionMessages.find(m => m.role === 'system')?.content,
+            system: systemPrompt,
+            messages: sessionMessages,
             tools: tools
           }),
         });
         return await resp.json();
       });
 
-      const message = (aiResponse as any);
-      if (!message.content) break;
-
-      sessionMessages.push({ role: 'assistant', content: message.content });
-      const toolUse = message.content.find((c: any) => c.type === 'tool_use');
+      const msg = (aiResponse as any);
+      sessionMessages.push({ role: 'assistant', content: msg.content });
+      const toolUse = msg.content.find((c: any) => c.type === 'tool_use');
 
       if (!toolUse) {
         isThinking = false;
       } else {
-        // STEP 2: ACT
-        const toolResult = await step.do(`execute-${toolUse.name}-${iteration}`, async () => {
-          const { name, input, id } = toolUse;
+        // Update UX so user knows which tool is running
+        await step.do(`status-update-${iteration}`, async () => {
+          await this.env.DB.prepare("UPDATE conversations SET content = ? WHERE summary = 1 AND role = 'system'")
+            .bind(`Agent is using tool: ${toolUse.name}...`).run();
+        });
 
-          switch (name) {
-            case "get_date_time":
-              return { tool_use_id: id, content: new Date().toLocaleString() };
-            
-            case "search_knowledge":
-              const queryVector = await this.env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [input.query] });
-              const matches = await this.env.VECTORIZE.query(queryVector.data[0], { topK: 3, returnMetadata: true });
-              return { tool_use_id: id, content: JSON.stringify(matches.matches.map(m => m.metadata)) };
+        const toolResult = await step.do(`exec-${toolUse.name}-${iteration}`, async () => {
+          const connectors = new Connectors(this.env);
+          const browser = new BrowserTool(this.env);
 
-            case "generate_image":
-              // Using Imagen 4.0 via Workers AI (Paid Plan capability)
-              const imgResult = await this.env.AI.run('@cf/stabilityai/stable-diffusion-xl-base-1.0', { prompt: input.prompt });
-              const r2Key = `generated/${Date.now()}.png`;
-              await this.env.FILES.put(r2Key, imgResult);
-              return { tool_use_id: id, content: `Image generated and stored at: ${r2Key}` };
-
+          switch (toolUse.name) {
             case "search_web":
-              // Placeholder for Browser Rendering / Search API
-              return { tool_use_id: id, content: "Search results: [Cloudflare Workers Paid Plan allows for Fetching external search APIs like Brave or Google]" };
-
+              return await browser.searchWeb(toolUse.input.query);
             case "send_email":
-              // Log to D1 as a "pending task" or call SendGrid/Mailgun
-              await this.env.DB.prepare("INSERT INTO conversations (role, content, ts) VALUES ('system', ?, ?)")
-                .bind(`ACTION: Email sent to ${input.to}`, Date.now()).run();
-              return { tool_use_id: id, content: "Email successfully queued for delivery." };
-
+              return await connectors.sendEmail(toolUse.input.to, toolUse.input.subject, toolUse.input.body);
+            case "post_linkedin":
+              return await connectors.postLinkedIn(toolUse.input.content);
+            case "search_knowledge":
+              const vector = await this.env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [toolUse.input.query] });
+              const match = await this.env.VECTORIZE.query(vector.data[0], { topK: 3, returnMetadata: true });
+              return match.matches.map(m => m.metadata);
             default:
-              return { tool_use_id: id, content: "Tool executed successfully." };
+              return "Tool not implemented.";
           }
         });
 
         sessionMessages.push({
           role: 'user',
-          content: [{ type: 'tool_result', tool_use_id: toolResult.tool_use_id, content: toolResult.content }]
+          content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: JSON.stringify(toolResult) }]
         });
       }
     }
 
-    // STEP 3: PERSIST
-    await step.do('final-save', async () => {
+    // 5. FINAL PERSISTENCE & CLEANUP
+    return await step.do('final-output', async () => {
       const finalMsg = sessionMessages[sessionMessages.length - 1].content;
-      const text = typeof finalMsg === 'string' ? finalMsg : finalMsg.find((c:any) => c.type === 'text')?.text || "Done.";
+      const text = typeof finalMsg === 'string' ? finalMsg : finalMsg.find((c: any) => c.type === 'text')?.text || "Done.";
       
-      await this.env.DB.prepare("INSERT INTO conversations (role, content, ts) VALUES (?, ?, ?)")
-        .bind('assistant', text, Date.now()).run();
+      // Remove the "Thinking..." status and insert real answer
+      await this.env.DB.prepare("DELETE FROM conversations WHERE summary = 1").run();
+      await this.env.DB.prepare("INSERT INTO conversations (role, content, ts) VALUES ('assistant', ?, ?)")
+        .bind(text, Date.now()).run();
+      
+      return text;
     });
-
-    return { status: 'success', iterations: iteration };
   }
 }
