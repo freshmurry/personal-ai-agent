@@ -11,9 +11,6 @@ compatibility_flags = ["nodejs_compat"]
 binding = "AI"
 
 # ─── Durable Objects ──────────────────────────────────────────────────────────
-[[durable_objects.bindings]]
-name = "AGENT"
-class_name = "AgentDO"
 
 [[durable_objects.bindings]]
 name = "SESSION"
