@@ -5,7 +5,7 @@ import { cors } from 'hono/cors';
  * SuperAgent — Integrated Worker Controller
  * Source of Truth: D1 Database
  * Storage: R2 Bucket
- * Logic: Cloudflare Workflows
+ * Logic: Cloudflare Workflows, Durable Objects, Vectorize
  */
 
 type Bindings = {
@@ -14,11 +14,16 @@ type Bindings = {
   CACHE: KVNamespace;
   OAUTH_STATES: KVNamespace;
   AUTOMATION_WORKFLOW: Workflow;
+  VECTORIZE: VectorizeIndex;
+  MY_QUEUE: Queue;
+  AGENT: DurableObjectNamespace;
+  SESSION: DurableObjectNamespace;
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_WHATSAPP_NUMBER: string;
   ANTHROPIC_API_KEY: string;
   ASSETS: { fetch: typeof fetch };
+  AI: any;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -33,7 +38,6 @@ app.use('/api/*', async (c, next) => {
   const current = await c.env.CACHE.get(limitKey);
   const count = parseInt(current || '0');
 
-  // Rate limit: 100 requests per minute per IP
   if (count > 100) {
     return c.json({ error: 'Rate limit exceeded. Please wait a minute.' }, 429);
   }
@@ -45,7 +49,7 @@ app.use('/api/*', async (c, next) => {
 // 2. SERVE UI (Cloudflare Assets)
 app.get('/', async (c) => c.env.ASSETS.fetch(c.req.raw));
 
-// 3. IDENTITY & MEMORY API (D1)
+// 3. IDENTITY & MEMORY API (D1 + Vectorize Sync)
 app.get('/api/identity', async (c) => {
   const { results } = await c.env.DB.prepare(
     "SELECT * FROM memory WHERE type = 'identity' ORDER BY ts DESC"
@@ -56,12 +60,22 @@ app.get('/api/identity', async (c) => {
 app.post('/api/memory', async (c) => {
   const { key, val, type } = await c.req.json();
   const ts = Date.now();
-  // Standard D1 UPSERT for the memory table
+  
+  // A. SQL Persistence
   await c.env.DB.prepare(`
     INSERT INTO memory (key, val, type, ts) 
     VALUES (?, ?, ?, ?) 
     ON CONFLICT(key) DO UPDATE SET val=excluded.val, ts=excluded.ts
   `).bind(key, val, type || 'fact', ts).run();
+
+  // B. Vector Embedding (Semantic Search)
+  const embedding = await c.env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [val] });
+  await c.env.VECTORIZE.upsert([{
+    id: key,
+    values: embedding.data[0],
+    metadata: { type: type || 'fact', text: val }
+  }]);
+
   return c.json({ success: true });
 });
 
@@ -79,10 +93,8 @@ app.put('/api/files/:name', async (c) => {
   const blob = await c.req.blob();
   const ext = name.split('.').pop() || '';
   
-  // A. Save binary to R2
   await c.env.FILES.put(name, blob);
   
-  // B. Sync metadata to D1 so the UI/Agent can see it
   await c.env.DB.prepare(`
     INSERT INTO files (name, path, folder, ext, size, modified) 
     VALUES (?, ?, ?, ?, ?, ?)
@@ -103,15 +115,21 @@ app.get('/api/files/:name', async (c) => {
   return new Response(object.body, { headers });
 });
 
-// 6. OAUTH CALLBACK (KV State Check + D1 Persistence)
+// 6. DURABLE OBJECT PROXY (For real-time state)
+app.all('/agent/:id/*', async (c) => {
+  const id = c.env.AGENT.idFromName(c.req.param('id'));
+  const obj = c.env.AGENT.get(id);
+  return obj.fetch(c.req.raw);
+});
+
+// 7. OAUTH CALLBACK
 app.get('/auth/callback/:service', async (c) => {
   const service = c.req.param('service');
   const { code, state } = c.req.query();
 
   const storedState = await c.env.OAUTH_STATES.get(`state:${service}`);
-  if (!state || state !== storedState) return c.text('OAuth CSRF Warning: State mismatch', 403);
+  if (!state || state !== storedState) return c.text('OAuth CSRF Warning', 403);
 
-  // Note: Here you would normally fetch the real token from the provider
   const mockAccessToken = `tok_${crypto.randomUUID()}`;
   
   await c.env.DB.prepare(`
@@ -123,19 +141,18 @@ app.get('/auth/callback/:service', async (c) => {
   return c.redirect('/?auth=success');
 });
 
-// 7. WHATSAPP WEBHOOK (Twilio)
+// 8. WHATSAPP WEBHOOK (Twilio + Queue)
 app.post('/webhook/whatsapp', async (c) => {
   const body = await c.req.parseBody();
   const from = body.From as string;
   const text = body.Body as string;
 
-  // Trigger Automation Workflow (mapped to src/workflows.ts)
-  await c.env.AUTOMATION_WORKFLOW.create({
-    params: { 
-      trigger: 'whatsapp', 
-      payload: { sender: from, message: text },
-      instructions: "Process this incoming WhatsApp message and respond if necessary."
-    }
+  // Offload to Queue for async processing to ensure 200 OK to Twilio under 1s
+  await c.env.MY_QUEUE.send({
+    type: 'whatsapp_message',
+    from,
+    text,
+    ts: Date.now()
   });
 
   return c.text('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {
@@ -143,11 +160,10 @@ app.post('/webhook/whatsapp', async (c) => {
   });
 });
 
-// 8. EXPORT FOR CRON + QUEUE
+// 9. EXPORTS (Standard Fetch + Cron + Queue)
 export default {
   fetch: app.fetch,
 
-  // Cron Handler: Checks D1 for active automations matching the cron pattern
   async scheduled(event: ScheduledEvent, env: Bindings) {
     const { results } = await env.DB.prepare(
       "SELECT * FROM automations WHERE active = 1 AND cron = ?"
@@ -164,14 +180,20 @@ export default {
     }
   },
 
-  // Queue Handler: For high-volume async tasks
   async queue(batch: MessageBatch<any>, env: Bindings) {
     for (const message of batch.messages) {
-      console.log('Ingesting queue task:', message.body);
-      // Example: Log queue activity to history
-      await env.DB.prepare("INSERT INTO conversations (role, content, ts) VALUES (?, ?, ?)")
-        .bind('system', `Queue processing: ${JSON.stringify(message.body)}`, Date.now())
-        .run();
+      const data = message.body;
+      
+      if (data.type === 'whatsapp_message') {
+        // Trigger the workflow from the queue consumer
+        await env.AUTOMATION_WORKFLOW.create({
+          params: { 
+            trigger: 'whatsapp', 
+            payload: { sender: data.from, message: data.text },
+            instructions: "Process WhatsApp message from queue."
+          }
+        });
+      }
     }
   }
 };
