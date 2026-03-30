@@ -46,7 +46,9 @@ CREATE TABLE IF NOT EXISTS automations (
 );
 
 CREATE TABLE IF NOT EXISTS oauth_tokens (
-  service       TEXT    PRIMARY KEY,
+  id INTEGER PRIMARY KEY,
+  user_id TEXT,
+  provider TEXT,
   access_token  TEXT    NOT NULL,
   refresh_token TEXT,
   expires_at    INTEGER,
