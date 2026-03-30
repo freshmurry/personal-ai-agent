@@ -2,48 +2,43 @@ import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from 'cloudflare:work
 
 interface Params {
   trigger: string;
-  cron?: string;
   instructions?: string;
   notify?: string;
-  payload?: Record<string, unknown>;
+  payload?: any;
 }
 
-export class AutomationWorkflow extends WorkflowEntrypoint<{}, Params> {
+export class AutomationWorkflow extends WorkflowEntrypoint<{ DB: D1Database, ANTHROPIC_API_KEY: string }, Params> {
   async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
-    const { trigger, instructions, notify } = event.payload;
+    const { trigger, instructions, payload } = event.payload;
 
-    const logged = await step.do('log-trigger', async () => ({
-      triggered_at: new Date().toISOString(),
-      trigger,
-    }));
-
-    const result = await step.do('execute', {
-      retries: { limit: 3, delay: '5 seconds', backoff: 'exponential' },
-      timeout: '2 minutes',
+    // 1. AI Execution Step
+    const aiResponse = await step.do('ai-logic', {
+      retries: { limit: 2, delay: '10 seconds' }
     }, async () => {
-      if (!instructions) return { skipped: true };
       const resp = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': (this.env as any).ANTHROPIC_API_KEY,
+          'x-api-key': this.env.ANTHROPIC_API_KEY,
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 500,
-          messages: [{ role: 'user', content: `Execute this automation and summarize what was done:\n\n${instructions}` }],
+          model: 'claude-3-5-sonnet-latest',
+          max_tokens: 1000,
+          messages: [{ role: 'user', content: `Trigger: ${trigger}\nContext: ${JSON.stringify(payload)}\nTask: ${instructions}` }],
         }),
       });
-      const d = await resp.json() as any;
-      return { result: d.content?.[0]?.text || 'Completed' };
+      return await resp.json();
     });
 
-    const notified = await step.do('notify', async () => {
-      console.log(`[Workflow] notify=${notify}, result=${(result as any).result}`);
-      return { notified: notify };
+    // 2. Persist Result to D1 History
+    await step.do('update-db', async () => {
+      const content = (aiResponse as any).content?.[0]?.text || "No response";
+      await this.env.DB.prepare(
+        "INSERT INTO conversations (role, content, ts) VALUES (?, ?, ?)"
+      ).bind('assistant', `[Workflow ${trigger}] ${content}`, Date.now()).run();
     });
 
-    return { success: true, trigger, logged, result, notified, completed_at: new Date().toISOString() };
+    return { status: 'completed' };
   }
 }
