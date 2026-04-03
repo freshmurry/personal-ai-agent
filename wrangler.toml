@@ -14,21 +14,20 @@ binding = "AI"
 
 [[durable_objects.bindings]]
 name = "SESSION"
-class_name = "SessionV2DO"
+class_name = "SessionDO"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["AgentDO", "SessionV2DO"]
+new_classes = ["AgentDO", "SessionDO"]
 
 
 [[migrations]]
 tag = "v2"
-# No new_classes — they already exist
-
+# no-op, schema unchanged
 
 [[migrations]]
 tag = "v3"
-new_classes = ["SessionV2DO"]
+# no-op, schema unchanged
 
 # ─── D1 ───────────────────────────────────────────────────────────────────────
 # Run: wrangler d1 create superagent-db  →  paste id below

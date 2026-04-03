@@ -5,6 +5,7 @@ import { SuperAgent } from './agent/engine';
 import { FileIntelligence } from './agent/file-intelligence';
 import { AutomationWorkflow } from './workflow';
 export { AutomationWorkflow };
+export { AgentDO, SessionDO } from './durable-objects';
 
 import type {
   ScheduledEvent,
@@ -47,36 +48,6 @@ export type Bindings = {
   CLOUDFLARE_ACCESS_TEAM_DOMAIN: string;
   CLOUDFLARE_ACCESS_AUD: string;
 };
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   Durable Object: SessionV2DO 
-───────────────────────────────────────────────────────────────────────────── */
-export class SessionV2DO  {
-  private state: DurableObjectState;
-
-  constructor(state: DurableObjectState) {
-    this.state = state;
-  }
-
-  async fetch(request: Request): Promise<Response> {
-    if (request.method === 'POST') {
-      const data = await request.json();
-      await this.state.storage.put('data', data);
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (request.method === 'GET') {
-      const data = await this.state.storage.get('data');
-      return new Response(JSON.stringify({ data }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    return new Response('SessionV2DO ready');
-  }
-}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    App setup
