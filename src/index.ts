@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { SuperAgent } from './agent/engine';
 import { FileIntelligence } from './agent/file-intelligence';
 import { AutomationWorkflow } from './workflow';
+export { AutomationWorkflow };
 
 import type {
   ScheduledEvent,
