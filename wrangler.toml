@@ -46,7 +46,7 @@ bucket_name = "superagent-files"
 # Run: wrangler vectorize create superagent-knowledge --dimensions=768 --metric=cosine
 [[vectorize]]
 binding    = "VECTORIZE"
-index_name = "vector-index"
+index_name = "superagent-knowledge"
 
 # ─── KV Namespaces ────────────────────────────────────────────────────────────
 # Run: wrangler kv namespace create CACHE       →  paste id below
@@ -68,7 +68,7 @@ class_name = "AutomationWorkflow"
 # ─── Queues ───────────────────────────────────────────────────────────────────
 # Run: wrangler queues create superagent-tasks
 [[queues.producers]]
-binding = "MY_QUEUE"
+binding = "TASK_QUEUE"
 queue   = "superagent-tasks"
 
 [[queues.consumers]]
@@ -85,7 +85,7 @@ binding   = "ASSETS"
 # ─── Non-secret vars (safe to commit) ─────────────────────────────────────────
 [vars]
 ENVIRONMENT = "production"
-WORKER_URL  = "https://superagent.YOUR_SUBDOMAIN.workers.dev"
+WORKER_URL  = "https://superagent.workers.dev"
 
 # ─── Cron triggers ────────────────────────────────────────────────────────────
 [triggers]
