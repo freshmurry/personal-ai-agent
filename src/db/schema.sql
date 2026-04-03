@@ -56,6 +56,57 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
   created       INTEGER NOT NULL
 );
 
+
+CREATE TABLE IF NOT EXISTS goals (
+  id            TEXT PRIMARY KEY,
+  description   TEXT NOT NULL,
+  status        TEXT DEFAULT 'active', -- active | paused | completed | failed
+  priority      INTEGER DEFAULT 5,
+  created       INTEGER NOT NULL,
+  last_updated  INTEGER,
+  completed     INTEGER
+);
+
+
+CREATE TABLE IF NOT EXISTS plans (
+  id        TEXT PRIMARY KEY,
+  goal_id   TEXT NOT NULL,
+  step_no   INTEGER NOT NULL,
+  action    TEXT NOT NULL,
+  status    TEXT DEFAULT 'pending', -- pending | running | done | failed
+  result    TEXT,
+  created   INTEGER NOT NULL,
+  updated   INTEGER,
+  FOREIGN KEY(goal_id) REFERENCES goals(id)
+);
+
+
+CREATE TABLE IF NOT EXISTS tool_runs (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  tool_name  TEXT NOT NULL,
+  input      TEXT,
+  output     TEXT,
+  success    INTEGER DEFAULT 1,
+  error      TEXT,
+  ts         INTEGER NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS reflections (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  context   TEXT NOT NULL,
+  insight   TEXT NOT NULL,
+  ts        INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS approvals (
+  id TEXT PRIMARY KEY,
+  type TEXT,
+  payload TEXT,
+  status TEXT,
+  created INTEGER
+);
+
 CREATE INDEX IF NOT EXISTS idx_memory_type ON memory(type);
 CREATE INDEX IF NOT EXISTS idx_memory_ts   ON memory(ts);
 CREATE INDEX IF NOT EXISTS idx_conv_ts     ON conversations(ts);

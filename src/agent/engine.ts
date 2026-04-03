@@ -1,269 +1,352 @@
 // src/agent/engine.ts
+// ==========================================
+// 🧠 SUPERAGENT v2 — AUTONOMOUS ENGINE (STABLE, CONSISTENT)
+// ==========================================
 
-// ==========================================
-// 🧠 SUPERAGENT v2 — AUTONOMOUS ENGINE
-// ==========================================
+import { BrowserTool } from '../../tools/browser';
+import { GitHubTool } from '../../tools/github';
 
 export interface AgentContext {
   userId: string;
   sessionId: string;
   query: string;
+  goalId?: string;
 }
 
-type AgentState = {
-  goal: string;
-  steps: any[];
-  memory: any[];
-  done: boolean;
+type Goal = {
+  id: string;
+  description: string;
+  status: string;
+  created: number;
+  last_updated?: number;
+};
+
+type PlanStep = {
+  id: string;
+  step_no: number;
+  action: string;
+  status: string;
 };
 
 type Tool = {
   name: string;
   description: string;
   schema: any;
+  risk: 'low' | 'medium' | 'high';
   handler: (input: any) => Promise<any>;
+};
+
+type GovernanceState = {
+  actionsTaken: number;
+  maxActions: number;
+  confidenceFloor: number;
 };
 
 export class SuperAgent {
   private tools: Record<string, Tool> = {};
+  private governors: GovernanceState = {
+    actionsTaken: 0,
+    maxActions: 50,
+    confidenceFloor: 0.85,
+  };
 
   constructor(private env: any) {
     this.registerTools();
   }
 
   // ==========================================
-  // 🚀 MAIN ENTRY (AGENT LOOP)
+  // 🚀 MAIN AUTONOMOUS LOOP
   // ==========================================
   async run(ctx: AgentContext) {
-    const state: AgentState = {
-      goal: ctx.query,
-      steps: [],
-      memory: await this.loadMemory(ctx.userId),
-      done: false,
-    };
+    const goal = ctx.goalId
+      ? await this.loadGoal(ctx.goalId)
+      : await this.createGoal(ctx.query);
 
-    for (let i = 0; i < 6; i++) {
-      const thought = await this.think(state);
-      const action = await this.decide(thought);
+    const plan = await this.loadOrCreatePlan(goal);
 
-      if (action.type === 'finish') {
-        state.done = true;
-        return action.output;
+    for (const step of plan) {
+      if (step.status === 'done') continue;
+
+      if (this.governors.actionsTaken >= this.governors.maxActions) {
+        return 'Governor halted execution (max actions reached)';
       }
 
-      const result = await this.act(action);
+      const thought = await this.think(goal, plan);
+      const decision = await this.decide(thought, step);
 
-      state.steps.push({ thought, action, result });
-      await this.reflect(state);
+      if (decision.type === 'finish') {
+        await this.completeGoal(goal, decision.output);
+        await this.reflectOnGoal(goal, plan);
+        return decision.output;
+      }
+
+      const result = await this.act(decision);
+      await this.recordToolRun(decision, result);
+      await this.markPlanStep(step, result);
     }
 
-    return this.finalize(state);
+    return 'Goal execution paused';
   }
 
   // ==========================================
-  // 🧠 THINK (LLM + VECTOR MEMORY)
+  // 🧠 THINK (MEMORY + VECTOR + TIME AWARE)
   // ==========================================
-  async think(state: AgentState) {
-    const vectorContext = await this.vectorSearch(state.goal);
+  async think(goal: Goal, plan: PlanStep[]) {
+    const memory = await this.loadMemory();
+    const vectorContext = await this.vectorSearch(goal.description);
+    const now = new Date().toISOString();
 
     const res = await this.env.AI.run(
       '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
       {
         messages: [
-          {
-            role: 'system',
-            content:
-              'You are an autonomous AI agent. Think step-by-step before acting.',
-          },
-          {
-            role: 'system',
-            content: `Relevant memory/context:\n${JSON.stringify(
-              vectorContext,
-            )}`,
-          },
-          {
-            role: 'system',
-            content: JSON.stringify(state),
-          },
-          {
-            role: 'user',
-            content: state.goal,
-          },
+          { role: 'system', content: 'You are an autonomous, cautious AI agent.' },
+          { role: 'system', content: `Current time: ${now}` },
+          { role: 'system', content: `Relevant memory: ${JSON.stringify(memory)}` },
+          { role: 'system', content: `Relevant knowledge: ${JSON.stringify(vectorContext)}` },
+          { role: 'system', content: `Current plan: ${JSON.stringify(plan)}` },
+          { role: 'user', content: goal.description },
         ],
-      },
+      }
     );
 
     return res.response;
   }
 
   // ==========================================
-  // 🎯 DECIDE
+  // 🎯 DECIDE (WITH CONFIDENCE GOVERNOR)
   // ==========================================
-  async decide(thought: string) {
-    const toolList = Object.values(this.tools).map((t) => ({
+  async decide(thought: string, step: PlanStep) {
+    const toolList = Object.values(this.tools).map(t => ({
       name: t.name,
       description: t.description,
+      risk: t.risk,
     }));
 
-    const res = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-      messages: [
-        {
-          role: 'system',
-          content: `Choose the next action.
-
-Return JSON ONLY:
+    const res = await this.env.AI.run(
+      '@cf/meta/llama-3.1-8b-instruct',
+      {
+        messages: [
+          {
+            role: 'system',
+            content: `Current step: ${step.action}
+Return JSON:
 {
   "type": "tool" | "finish",
-  "tool": "tool_name",
+  "tool": "string | null",
   "input": {},
-  "output": "final answer if finished"
+  "output": "string | null",
+  "confidence": number
 }`,
-        },
-        { role: 'system', content: JSON.stringify(toolList) },
-        { role: 'user', content: thought },
-      ],
-    });
+          },
+          { role: 'system', content: JSON.stringify(toolList) },
+          { role: 'user', content: thought },
+        ],
+      }
+    );
 
-    try {
-      return JSON.parse(res.response);
-    } catch {
+    const decision = JSON.parse(res.response);
+    const confidence = decision.confidence ?? 0;
+
+    if (confidence < this.governors.confidenceFloor) {
       return {
         type: 'finish',
-        output: 'I could not determine a valid next action.',
+        output: 'Decision confidence below safety threshold.',
       };
     }
+
+    return decision;
   }
 
   // ==========================================
-  // ⚙️ ACT
+  // ⚙️ ACT (WITH RISK GOVERNORS)
   // ==========================================
   async act(action: any) {
     if (action.type !== 'tool') return null;
 
     const tool = this.tools[action.tool];
-    if (!tool) return { error: 'Unknown tool' };
+    if (!tool) throw new Error('Unknown tool');
 
-    try {
-      return await tool.handler(action.input);
-    } catch (e) {
-      return { error: String(e) };
+    if (tool.risk === 'high' && !this.env.ALLOW_HIGH_RISK_ACTIONS) {
+      throw new Error('High-risk action blocked by governor');
     }
-  }
 
-  // ==========================================
-  // 🔁 REFLECT
-  // ==========================================
-  async reflect(state: AgentState) {
-    await this.env.DB.prepare(
-      'INSERT INTO memory (user_id, key, val, ts) VALUES (?, ?, ?, ?)',
-    )
-      .bind(
-        'system',
-        'agent_step',
-        JSON.stringify(state.steps.at(-1)),
-        Date.now(),
-      )
-      .run();
-  }
-
-  // ==========================================
-  // 🧠 FINALIZE
-  // ==========================================
-  async finalize(state: AgentState) {
-    const res = await this.env.AI.run(
-      '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
-      {
-        messages: [
-          { role: 'system', content: 'Generate the final answer.' },
-          { role: 'system', content: JSON.stringify(state.steps) },
-          { role: 'user', content: state.goal },
-        ],
-      },
-    );
-
-    return res.response;
+    this.governors.actionsTaken++;
+    return tool.handler(action.input);
   }
 
   // ==========================================
   // 🧠 MEMORY
   // ==========================================
-  async loadMemory(userId: string) {
+  async loadMemory() {
     const { results } = await this.env.DB.prepare(
-      'SELECT * FROM memory WHERE user_id = ? ORDER BY ts DESC LIMIT 10',
-    )
-      .bind(userId)
-      .all();
-
+      'SELECT * FROM memory ORDER BY ts DESC LIMIT 10'
+    ).all();
     return results;
   }
 
   // ==========================================
-  // 🧠 VECTOR SEARCH
+  // 🔍 VECTOR SEARCH
   // ==========================================
   async vectorSearch(query: string) {
     const embedding = await this.env.AI.run(
       '@cf/baai/bge-base-en-v1.5',
-      { text: [query] },
+      { text: [query] }
     );
 
-    const results = await this.env.VECTORIZE.query(embedding.data[0], {
-      topK: 5,
-    });
+    const results = await this.env.VECTORIZE.query(
+      embedding.data[0],
+      { topK: 5 }
+    );
 
     return results.matches || [];
   }
 
   // ==========================================
-  // 🧰 TOOLS
+  // 🧭 GOALS / PLANS
+  // ==========================================
+  async createGoal(description: string): Promise<Goal> {
+    const id = crypto.randomUUID();
+    const now = Date.now();
+
+    await this.env.DB.prepare(
+      `INSERT INTO goals (id, description, status, created)
+       VALUES (?, ?, 'active', ?)`
+    ).bind(id, description, now).run();
+
+    return { id, description, status: 'active', created: now };
+  }
+
+  async loadGoal(id: string): Promise<Goal> {
+    const { results } = await this.env.DB.prepare(
+      `SELECT * FROM goals WHERE id=?`
+    ).bind(id).all();
+
+    if (!results.length) throw new Error('Goal not found');
+    return results[0];
+  }
+
+  async loadOrCreatePlan(goal: Goal): Promise<PlanStep[]> {
+    const { results } = await this.env.DB.prepare(
+      `SELECT * FROM plans WHERE goal_id=? ORDER BY step_no`
+    ).bind(goal.id).all();
+
+    if (results.length) return results;
+
+    const resp = await this.env.AI.run(
+      '@cf/meta/llama-3.1-8b-instruct',
+      {
+        messages: [{ role: 'user', content: `Break into steps:\n${goal.description}` }],
+      }
+    );
+
+    const steps = resp.response.split('\n').filter(Boolean);
+    for (let i = 0; i < steps.length; i++) {
+      await this.env.DB.prepare(
+        `INSERT INTO plans (id, goal_id, step_no, action, status, created)
+         VALUES (?, ?, ?, ?, 'pending', ?)`
+      ).bind(
+        crypto.randomUUID(),
+        goal.id,
+        i,
+        steps[i],
+        Date.now()
+      ).run();
+    }
+
+    return this.loadOrCreatePlan(goal);
+  }
+
+  async markPlanStep(step: PlanStep, result: any) {
+    await this.env.DB.prepare(
+      `UPDATE plans SET status='done', result=?, updated=? WHERE id=?`
+    ).bind(JSON.stringify(result), Date.now(), step.id).run();
+  }
+
+  async completeGoal(goal: Goal, output: string) {
+    await this.env.DB.prepare(
+      `UPDATE goals SET status='completed', completed=? WHERE id=?`
+    ).bind(Date.now(), goal.id).run();
+
+    await this.env.DB.prepare(
+      `INSERT INTO conversations (role, content, ts)
+       VALUES ('assistant', ?, ?)`
+    ).bind(output, Date.now()).run();
+  }
+
+  async reflectOnGoal(goal: Goal, plan: PlanStep[]) {
+    const reflection = await this.env.AI.run(
+      '@cf/meta/llama-3.3-70b-instruct',
+      {
+        messages: [
+          { role: 'system', content: 'Reflect on what worked and what did not.' },
+          { role: 'user', content: JSON.stringify({ goal, plan }) },
+        ],
+      }
+    );
+
+    await this.env.DB.prepare(
+      `INSERT INTO reflections (context, insight, ts)
+       VALUES (?, ?, ?)`
+    ).bind(goal.description, reflection.response, Date.now()).run();
+  }
+
+  // ==========================================
+  // 🧰 TOOL REGISTRY (INLINE, STABLE)
   // ==========================================
   registerTools() {
+    const browser = new BrowserTool(this.env);
+    const github = new GitHubTool(this.env);
+
     this.addTool({
       name: 'web_search',
       description: 'Search the internet',
       schema: { query: 'string' },
-      handler: async ({ query }) => {
-        return { result: `Search results for: ${query}` };
-      },
-    });
-
-    this.addTool({
-      name: 'generate_image',
-      description: 'Create an image',
-      schema: { prompt: 'string' },
-      handler: async ({ prompt }) => {
-        return await this.env.AI.run(
-          '@cf/stabilityai/stable-diffusion-xl-base-1.0',
-          { prompt },
-        );
-      },
-    });
-
-    this.addTool({
-      name: 'search_files',
-      description: 'Search uploaded files',
-      schema: { query: 'string' },
-      handler: async ({ query }) => {
-        return await this.vectorSearch(query);
-      },
+      risk: 'low',
+      handler: async ({ query }) => browser.searchWeb(query),
     });
 
     this.addTool({
       name: 'memory_write',
-      description: 'Store memory',
+      description: 'Persist memory',
       schema: { key: 'string', value: 'string' },
+      risk: 'low',
       handler: async ({ key, value }) => {
         await this.env.DB.prepare(
-          'INSERT INTO memory (key, val, ts) VALUES (?, ?, ?)',
-        )
-          .bind(key, value, Date.now())
-          .run();
-
+          'INSERT INTO memory (key, val, ts) VALUES (?, ?, ?)'
+        ).bind(key, value, Date.now()).run();
         return { success: true };
       },
+    });
+
+    this.addTool({
+      name: 'github_propose_change',
+      description: 'Propose code changes via GitHub PR',
+      schema: {
+        repo: 'string',
+        branch: 'string',
+        title: 'string',
+        description: 'string',
+        files: 'array',
+      },
+      risk: 'high',
+      handler: async (input) => github.proposeChange(input),
     });
   }
 
   addTool(tool: Tool) {
     this.tools[tool.name] = tool;
+  }
+
+  async recordToolRun(action: any, result: any) {
+    await this.env.DB.prepare(
+      `INSERT INTO tool_runs (tool_name, input, output, ts)
+       VALUES (?, ?, ?, ?)`
+    ).bind(
+      action.tool,
+      JSON.stringify(action.input),
+      JSON.stringify(result),
+      Date.now()
+    ).run();
   }
 }

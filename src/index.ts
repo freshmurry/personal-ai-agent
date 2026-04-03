@@ -4,8 +4,9 @@ import { cors } from 'hono/cors';
 import { SuperAgent } from './agent/engine';
 import { FileIntelligence } from './agent/file-intelligence';
 import { AutomationWorkflow } from './workflow';
-export { AutomationWorkflow };
-export { AgentDO, SessionDO } from './durable-objects';
+import { AgentDO, SessionDO } from './durable-objects';
+
+export { AutomationWorkflow, AgentDO, SessionDO };
 
 import type {
   ScheduledEvent,
@@ -13,45 +14,38 @@ import type {
   MessageBatch,
 } from '@cloudflare/workers-types';
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Bindings (must match wrangler.toml exactly)
-───────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   Bindings
+───────────────────────────────────────────────────────────── */
 export type Bindings = {
-  // Core storage
   DB: D1Database;
   FILES: R2Bucket;
   CACHE: KVNamespace;
   OAUTH_STATES: KVNamespace;
 
-  // AI + Vector
   AI: any;
   VECTORIZE: VectorizeIndex;
 
-  // Durable Objects
   SESSION: DurableObjectNamespace;
 
-  // Workflows / Queues
   AUTOMATION_WORKFLOW: Workflow;
   MY_QUEUE: Queue;
 
-  // Assets
   ASSETS: { fetch: typeof fetch };
 
-  // Env vars
   ENVIRONMENT: 'development' | 'production';
   ANTHROPIC_API_KEY: string;
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_WHATSAPP_NUMBER: string;
 
-  // Cloudflare Access (Zero Trust)
   CLOUDFLARE_ACCESS_TEAM_DOMAIN: string;
   CLOUDFLARE_ACCESS_AUD: string;
 };
 
-/* ─────────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
    App setup
-───────────────────────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────────── */
 const app = new Hono<{ Bindings: Bindings }>();
 
 app.use(
@@ -62,9 +56,9 @@ app.use(
   }),
 );
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Cloudflare Access validation
-───────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   Auth guard (Cloudflare Access)
+───────────────────────────────────────────────────────────── */
 async function validateCFAccess(
   request: Request,
   env: Bindings,
@@ -112,9 +106,9 @@ async function validateCFAccess(
   }
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Rate limiting (KV)
-───────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   Rate limiting
+───────────────────────────────────────────────────────────── */
 async function rateLimit(
   request: Request,
   env: Bindings,
@@ -133,18 +127,18 @@ async function rateLimit(
   return true;
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
    Auth guard for API
-───────────────────────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────────── */
 app.use('/api/*', async (c, next) => {
   const ok = await validateCFAccess(c.req.raw, c.env);
   if (!ok) return c.json({ error: 'Unauthorized' }, 401);
   await next();
 });
 
-/* ─────────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
    CHAT API
-───────────────────────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────────── */
 app.post('/api/chat', async (c) => {
   const allowed = await rateLimit(c.req.raw, c.env, 60);
   if (!allowed) return c.json({ error: 'Rate limit exceeded' }, 429);
@@ -161,47 +155,9 @@ app.post('/api/chat', async (c) => {
   return c.json({ response: result });
 });
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   HISTORY + MEMORY
-───────────────────────────────────────────────────────────────────────────── */
-app.get('/api/history', async (c) => {
-  const { results } = await c.env.DB.prepare(
-    'SELECT * FROM conversations ORDER BY ts DESC LIMIT 100',
-  ).all();
-  return c.json(results);
-});
-
-app.post('/api/memory', async (c) => {
-  const body = await c.req.json();
-  const ts = Date.now();
-
-  await c.env.DB.prepare(
-    `INSERT INTO memory (key, val, type, ts)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(key) DO UPDATE SET val=excluded.val, ts=excluded.ts`,
-  )
-    .bind(body.key, body.val, body.type || 'fact', ts)
-    .run();
-
-  const embedding = await c.env.AI.run(
-    '@cf/baai/bge-base-en-v1.5',
-    { text: [body.val] },
-  );
-
-  await c.env.VECTORIZE.upsert([
-    {
-      id: body.key,
-      values: embedding.data[0],
-      metadata: { text: body.val },
-    },
-  ]);
-
-  return c.json({ ok: true });
-});
-
-/* ─────────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
    FILES
-───────────────────────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────────── */
 app.put('/api/files/:key{.+}', async (c) => {
   const key = c.req.param('key');
   const body = await c.req.arrayBuffer();
@@ -214,17 +170,17 @@ app.put('/api/files/:key{.+}', async (c) => {
   return c.json({ ok: true, key });
 });
 
-/* ─────────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
    SESSION PROXY
-───────────────────────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────────── */
 app.all('/session/:id/*', async (c) => {
   const id = c.env.SESSION.idFromName(c.req.param('id'));
   return c.env.SESSION.get(id).fetch(c.req.raw);
 });
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   EXPORTS
-───────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   EXPORTS (HTTP + CRON / HEARTBEAT)
+───────────────────────────────────────────────────────────── */
 export default {
   fetch: app.fetch,
 
@@ -233,14 +189,29 @@ export default {
     env: Bindings,
     ctx: ExecutionContext,
   ) {
-    ctx.waitUntil(
-      env.AUTOMATION_WORKFLOW.create({
-        params: { trigger: 'cron', cron: event.cron },
-      }),
-    );
+    ctx.waitUntil((async () => {
+      const { results: goals } = await env.DB.prepare(
+        `SELECT * FROM goals WHERE status = 'active'`
+      ).all();
+
+      for (const goal of goals) {
+        const last = goal.last_updated ?? goal.created;
+        const idle = Date.now() - last;
+
+        if (idle > 10 * 60 * 1000) {
+          await env.AUTOMATION_WORKFLOW.create({
+            params: {
+              trigger: 'heartbeat',
+              instructions: goal.description,
+              goalId: goal.id,
+            },
+          });
+        }
+      }
+    })());
   },
 
-  async queue(batch: MessageBatch<any>, env: Bindings) {
+  async queue(batch: MessageBatch<any>) {
     for (const msg of batch.messages) {
       console.log('[Queue]', msg.body);
       msg.ack();
