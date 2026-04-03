@@ -49,9 +49,9 @@ export type Bindings = {
 };
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Durable Object: SessionDO
+   Durable Object: SessionV2DO 
 ───────────────────────────────────────────────────────────────────────────── */
-export class SessionDO {
+export class SessionV2DO  {
   private state: DurableObjectState;
 
   constructor(state: DurableObjectState) {
@@ -74,7 +74,7 @@ export class SessionDO {
       });
     }
 
-    return new Response('SessionDO ready');
+    return new Response('SessionV2DO ready');
   }
 }
 
