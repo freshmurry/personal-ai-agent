@@ -17,15 +17,6 @@ name = "SESSION"
 class_name = "SessionDO"
 
 [[migrations]]
-tag = "v1"
-new_classes = ["AgentDO", "SessionDO"]
-
-
-[[migrations]]
-tag = "v2"
-# no-op, schema unchanged
-
-[[migrations]]
 tag = "v3"
 # no-op, schema unchanged
 
