@@ -3,15 +3,15 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "dev":          "wrangler dev --env-file .env",
-    "deploy":       "wrangler deploy",
-    "deploy:db":    "wrangler d1 execute superagent-db --file=src/db/schema.sql --remote",
+    "dev": "wrangler dev --env-file .env",
+    "deploy": "wrangler deploy",
+    "deploy:db": "wrangler d1 execute superagent-db --file=src/db/schema.sql --remote",
     "secrets:push": "node scripts/push-secrets.mjs",
-    "logs":         "wrangler tail",
-    "types":        "wrangler types"
+    "logs": "wrangler tail",
+    "types": "wrangler types"
   },
   "dependencies": {
-    "hono": "^4.12.8"
+    "hono": "^4.12.10"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260317.1",

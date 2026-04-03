@@ -1,4 +1,4 @@
-//src/agent/engine.ts
+// src/agent/engine.ts
 
 // ==========================================
 // 🧠 SUPERAGENT v2 — AUTONOMOUS ENGINE
@@ -32,33 +32,28 @@ export class SuperAgent {
   }
 
   // ==========================================
-  // 🚀 MAIN ENTRY (REAL AGENT LOOP)
+  // 🚀 MAIN ENTRY (AGENT LOOP)
   // ==========================================
   async run(ctx: AgentContext) {
     const state: AgentState = {
       goal: ctx.query,
       steps: [],
       memory: await this.loadMemory(ctx.userId),
-      done: false
+      done: false,
     };
 
     for (let i = 0; i < 6; i++) {
       const thought = await this.think(state);
       const action = await this.decide(thought);
 
-      if (action.type === "finish") {
+      if (action.type === 'finish') {
         state.done = true;
         return action.output;
       }
 
       const result = await this.act(action);
 
-      state.steps.push({
-        thought,
-        action,
-        result
-      });
-
+      state.steps.push({ thought, action, result });
       await this.reflect(state);
     }
 
@@ -66,46 +61,76 @@ export class SuperAgent {
   }
 
   // ==========================================
-  // 🧠 THINK
+  // 🧠 THINK (LLM + VECTOR MEMORY)
   // ==========================================
   async think(state: AgentState) {
-    const res = await this.env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
-      messages: [
-        { role: "system", content: "You are an autonomous AI agent. Think step-by-step." },
-        { role: "system", content: JSON.stringify(state) },
-        { role: "user", content: state.goal }
-      ]
-    });
+    const vectorContext = await this.vectorSearch(state.goal);
+
+    const res = await this.env.AI.run(
+      '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+      {
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are an autonomous AI agent. Think step-by-step before acting.',
+          },
+          {
+            role: 'system',
+            content: `Relevant memory/context:\n${JSON.stringify(
+              vectorContext,
+            )}`,
+          },
+          {
+            role: 'system',
+            content: JSON.stringify(state),
+          },
+          {
+            role: 'user',
+            content: state.goal,
+          },
+        ],
+      },
+    );
 
     return res.response;
   }
 
   // ==========================================
-  // 🎯 DECIDE (STRUCTURED OUTPUT)
+  // 🎯 DECIDE
   // ==========================================
   async decide(thought: string) {
-    const toolList = Object.values(this.tools).map(t => ({
+    const toolList = Object.values(this.tools).map((t) => ({
       name: t.name,
-      description: t.description
+      description: t.description,
     }));
 
-    const res = await this.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+    const res = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
       messages: [
         {
-          role: "system",
-          content: `Choose next action:
-          Return JSON:
-          { "type": "tool" | "finish", "tool": "...", "input": {}, "output": "..." }`
+          role: 'system',
+          content: `Choose the next action.
+
+Return JSON ONLY:
+{
+  "type": "tool" | "finish",
+  "tool": "tool_name",
+  "input": {},
+  "output": "final answer if finished"
+}`,
         },
-        { role: "system", content: JSON.stringify(toolList) },
-        { role: "user", content: thought }
-      ]
+        { role: 'system', content: JSON.stringify(toolList) },
+        { role: 'user', content: thought },
+      ],
     });
 
     try {
       return JSON.parse(res.response);
     } catch {
-      return { type: "finish", output: "Failed to parse action." };
+      return {
+        type: 'finish',
+        output: 'I could not determine a valid next action.',
+      };
     }
   }
 
@@ -113,10 +138,10 @@ export class SuperAgent {
   // ⚙️ ACT
   // ==========================================
   async act(action: any) {
-    if (action.type !== "tool") return null;
+    if (action.type !== 'tool') return null;
 
     const tool = this.tools[action.tool];
-    if (!tool) return { error: "Unknown tool" };
+    if (!tool) return { error: 'Unknown tool' };
 
     try {
       return await tool.handler(action.input);
@@ -126,30 +151,35 @@ export class SuperAgent {
   }
 
   // ==========================================
-  // 🔁 REFLECT (SELF-CORRECTION)
+  // 🔁 REFLECT
   // ==========================================
   async reflect(state: AgentState) {
     await this.env.DB.prepare(
-      "INSERT INTO memory (user_id, key, val, ts) VALUES (?, ?, ?, ?)"
-    ).bind(
-      "system",
-      "agent_step",
-      JSON.stringify(state.steps.slice(-1)[0]),
-      Date.now()
-    ).run();
+      'INSERT INTO memory (user_id, key, val, ts) VALUES (?, ?, ?, ?)',
+    )
+      .bind(
+        'system',
+        'agent_step',
+        JSON.stringify(state.steps.at(-1)),
+        Date.now(),
+      )
+      .run();
   }
 
   // ==========================================
   // 🧠 FINALIZE
   // ==========================================
   async finalize(state: AgentState) {
-    const res = await this.env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
-      messages: [
-        { role: "system", content: "Generate final answer." },
-        { role: "system", content: JSON.stringify(state.steps) },
-        { role: "user", content: state.goal }
-      ]
-    });
+    const res = await this.env.AI.run(
+      '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+      {
+        messages: [
+          { role: 'system', content: 'Generate the final answer.' },
+          { role: 'system', content: JSON.stringify(state.steps) },
+          { role: 'user', content: state.goal },
+        ],
+      },
+    );
 
     return res.response;
   }
@@ -159,8 +189,10 @@ export class SuperAgent {
   // ==========================================
   async loadMemory(userId: string) {
     const { results } = await this.env.DB.prepare(
-      "SELECT * FROM memory WHERE user_id = ? ORDER BY ts DESC LIMIT 10"
-    ).bind(userId).all();
+      'SELECT * FROM memory WHERE user_id = ? ORDER BY ts DESC LIMIT 10',
+    )
+      .bind(userId)
+      .all();
 
     return results;
   }
@@ -170,63 +202,64 @@ export class SuperAgent {
   // ==========================================
   async vectorSearch(query: string) {
     const embedding = await this.env.AI.run(
-      "@cf/baai/bge-base-en-v1.5",
-      { text: query }
+      '@cf/baai/bge-base-en-v1.5',
+      { text: [query] },
     );
 
-    const results = await this.env.VECTORIZE.query(
-      embedding.data[0],
-      { topK: 5 }
-    );
+    const results = await this.env.VECTORIZE.query(embedding.data[0], {
+      topK: 5,
+    });
 
     return results.matches || [];
   }
 
   // ==========================================
-  // 🧰 TOOL REGISTRY
+  // 🧰 TOOLS
   // ==========================================
   registerTools() {
     this.addTool({
-      name: "web_search",
-      description: "Search the internet",
-      schema: { query: "string" },
+      name: 'web_search',
+      description: 'Search the internet',
+      schema: { query: 'string' },
       handler: async ({ query }) => {
-        // 🔴 Replace with Tavily or Serper
         return { result: `Search results for: ${query}` };
-      }
+      },
     });
 
     this.addTool({
-      name: "generate_image",
-      description: "Create an image",
-      schema: { prompt: "string" },
+      name: 'generate_image',
+      description: 'Create an image',
+      schema: { prompt: 'string' },
       handler: async ({ prompt }) => {
-        return await this.env.AI.run("@cf/stabilityai/stable-diffusion-xl-base-1.0", {
-          prompt
-        });
-      }
+        return await this.env.AI.run(
+          '@cf/stabilityai/stable-diffusion-xl-base-1.0',
+          { prompt },
+        );
+      },
     });
 
     this.addTool({
-      name: "search_files",
-      description: "Search uploaded files",
-      schema: { query: "string" },
+      name: 'search_files',
+      description: 'Search uploaded files',
+      schema: { query: 'string' },
       handler: async ({ query }) => {
         return await this.vectorSearch(query);
-      }
+      },
     });
 
     this.addTool({
-      name: "memory_write",
-      description: "Store memory",
-      schema: { key: "string", value: "string" },
+      name: 'memory_write',
+      description: 'Store memory',
+      schema: { key: 'string', value: 'string' },
       handler: async ({ key, value }) => {
         await this.env.DB.prepare(
-          "INSERT INTO memory (key, val, ts) VALUES (?, ?, ?)"
-        ).bind(key, value, Date.now()).run();
+          'INSERT INTO memory (key, val, ts) VALUES (?, ?, ?)',
+        )
+          .bind(key, value, Date.now())
+          .run();
 
         return { success: true };
-      }
+      },
     });
   }
 
@@ -234,6 +267,3 @@ export class SuperAgent {
     this.tools[tool.name] = tool;
   }
 }
-
-const vectorContext = await this.vectorSearch(ctx.query);
-{ role: "system", content: JSON.stringify(vectorContext) }
