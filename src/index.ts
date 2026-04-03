@@ -8,6 +8,63 @@ import { cors } from 'hono/cors';
  * Logic: Cloudflare Workflows, Vectorize, Queues
  */
 
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+
+/**
+ * SuperAgent — Integrated Worker Controller
+ * ...
+ */
+
+export class SessionDO {
+  state: DurableObjectState;
+  env: Bindings;
+
+  constructor(state: DurableObjectState, env: Bindings) {
+    this.state = state;
+    this.env = env;
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    if (request.method === 'POST') {
+      const data = await request.json();
+      await this.state.storage.put('data', data);
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (request.method === 'GET') {
+      const data = await this.state.storage.get('data');
+      return new Response(JSON.stringify({ data }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    return new Response('SessionDO OK');
+  }
+}
+
+type Bindings = {
+  DB: D1Database;
+  FILES: R2Bucket;
+  CACHE: KVNamespace;
+  OAUTH_STATES: KVNamespace;
+  AUTOMATION_WORKFLOW: Workflow;
+  VECTORIZE: VectorizeIndex;
+  MY_QUEUE: Queue;
+  SESSION: DurableObjectNamespace;
+  TWILIO_ACCOUNT_SID: string;
+  TWILIO_AUTH_TOKEN: string;
+  TWILIO_WHATSAPP_NUMBER: string;
+  ANTHROPIC_API_KEY: string;
+  ASSETS: { fetch: typeof fetch };
+  AI: any;
+};
+
+const app = new Hono<{ Bindings: Bindings }>();
 type Bindings = {
   DB: D1Database;
   FILES: R2Bucket;
