@@ -19,3 +19,16 @@ export class SessionDO {
     await this.state.storage.delete('session');
   }
 }
+
+
+export class AgentDO {
+  private state: DurableObjectState;
+
+  constructor(state: DurableObjectState) {
+    this.state = state;
+  }
+
+  async fetch(): Promise<Response> {
+    return new Response('AgentDO active');
+  }
+}
