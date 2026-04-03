@@ -20,6 +20,12 @@ class_name = "SessionDO"
 tag = "v1"
 new_classes = ["AgentDO", "SessionDO"]
 
+
+[[migrations]]
+tag = "v2"
+# No new_classes — they already exist
+
+
 # ─── D1 ───────────────────────────────────────────────────────────────────────
 # Run: wrangler d1 create superagent-db  →  paste id below
 [[d1_databases]]
