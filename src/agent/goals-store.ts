@@ -1,23 +1,18 @@
 // src/agent/goals-store.ts
+import type { Bindings } from '../bindings'
 
-export type Goal = {
-  id: string;
-  description: string;
-  status: string;
-};
-
-export async function loadActiveGoals(env: any): Promise<Goal[]> {
-  const { results } = await env.DB.prepare(
-    `SELECT * FROM goals WHERE status='active'`
-  ).all();
-  return results;
+export interface Goal {
+  id: string
+  description: string
+  status: string
+  priority: number
+  created: number
+  last_updated: number
 }
 
-export async function createGoal(env: any, description: string): Promise<Goal> {
-  const id = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO goals (id, description, status, created)
-     VALUES (?, ?, 'active', ?)`
-  ).bind(id, description, Date.now()).run();
-  return { id, description, status: 'active' };
+export async function loadActiveGoals(env: Bindings): Promise<Goal[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, description, status, priority, created, last_updated FROM goals WHERE status = 'active' ORDER BY priority DESC, created DESC LIMIT 20`
+  ).all<Goal>()
+  return results
 }
