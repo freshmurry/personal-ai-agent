@@ -1,5 +1,11 @@
-// src/api/memory.ts
+// src/index.ts
 import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+
+import { memory } from './api/memory'
+import { SuperAgent } from './agent/engine'
+import { AgentDO, SessionDO } from './durable-objects'
+import { AutomationWorkflow } from './workflow'
 
 export type Bindings = {
   DB: D1Database
@@ -8,61 +14,44 @@ export type Bindings = {
   AI: any
   VECTORIZE: VectorizeIndex
   SESSION: DurableObjectNamespace
+  AGENT: DurableObjectNamespace
   AUTOMATION_WORKFLOW: Workflow
   ENVIRONMENT: 'development' | 'production'
 }
 
+const app = new Hono<{ Bindings: Bindings }>()
 
-export const memory = new Hono<{ Bindings: Bindings }>()
+app.use('*', cors())
 
-/* ─────────────── GET all memory ─────────────── */
-memory.get('/', async (c) => {
-  const stmt = c.env.DB.prepare('SELECT * FROM memory')
-  const { results } = await stmt.bind().all()
-  return c.json(results ?? [])
+/* ─────────────── Memory API ─────────────── */
+app.route('/api/memory', memory)
+
+/* ─────────────── Chat API ─────────────── */
+app.post('/api/chat', async (c) => {
+  const { messages } = await c.req.json()
+  const text = messages?.[messages.length - 1]?.content ?? ''
+
+  const agent = new SuperAgent(c.env)
+  const result = await agent.run({
+    userId: 'default',
+    sessionId: 'default',
+    query: text,
+  })
+
+  return c.json({
+    messages: [
+      { role: 'assistant', content: result },
+    ],
+  })
 })
 
-/* ─────────────── POST add / update memory ─────────────── */
-memory.post('/', async (c) => {
-  const { key, val, type = 'fact' } = await c.req.json()
+/* ─────────────── Durable Objects ─────────────── */
+export { SessionDO, AgentDO }
 
-  if (!key || !val) {
-    return c.json({ error: 'Missing key or value' }, 400)
-  }
+/* ─────────────── Workflow ─────────────── */
+export { AutomationWorkflow }
 
-  await c.env.DB.prepare(`
-    INSERT INTO memory (key, val, type, freq, ts)
-    VALUES (?, ?, ?, 1, ?)
-    ON CONFLICT(key) DO UPDATE SET
-      val = excluded.val,
-      type = excluded.type,
-      freq = freq + 1,
-      ts = excluded.ts
-  `)
-    .bind(key, val, type, Date.now())
-    .run()
-
-  return c.json({ ok: true })
-})
-
-/* ─────────────── DELETE all memory ─────────────── */
-memory.delete('/', async (c) => {
-  await c.env.DB
-    .prepare('DELETE FROM memory')
-    .bind()
-    .run()
-
-  return c.json({ ok: true })
-})
-
-/* ─────────────── DELETE specific key ─────────────── */
-memory.delete('/:key', async (c) => {
-  const key = c.req.param('key')
-
-  await c.env.DB
-    .prepare('DELETE FROM memory WHERE key = ?')
-    .bind(key)
-    .run()
-
-  return c.json({ ok: true })
-})
+/* ─────────────── ✅ REQUIRED DEFAULT EXPORT ─────────────── */
+export default {
+  fetch: app.fetch,
+}
