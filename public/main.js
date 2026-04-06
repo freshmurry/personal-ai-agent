@@ -74,18 +74,32 @@
 
       return _callStream(
         messages,
+
+        // ✅ chunk handler unchanged
         onChunk,
+
+        // ✅ done handler
         function (full) {
           if (!finalized) {
             finalized = true;
             onDone(full);
           }
         },
+
+        // ✅ ERROR HANDLER – THIS IS THE IMPORTANT PART
         function (err) {
-          if (!finalized) {
-            finalized = true;
-            onErr(err);
-          }
+          if (finalized) return;
+          finalized = true;
+
+          // Defensive: surface real error text if it was JSON parse related
+          const message =
+            typeof err === 'string'
+              ? err
+              : err?.message || 'Unknown server error';
+
+          console.error('[callStream:error]', err);
+
+          onErr(message);
         }
       );
     };
@@ -103,7 +117,13 @@
         await _streamResp(text);
       } catch (e) {
         console.error('[streamResp]', e);
-        addBubble('assistant', '⚠️ Streaming failed.', Date.now());
+
+        const message =
+          typeof e === 'string'
+            ? e
+            : e?.message || 'Server error';
+
+        addBubble('assistant', `⚠️ ${message}`, Date.now());
       } finally {
         window.BUSY = false;
         setAiStatus((id?.name || 'SuperAgent') + ' ready');

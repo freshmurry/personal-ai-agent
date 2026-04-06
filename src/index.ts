@@ -33,30 +33,43 @@ app.route('/api/memory', memory)
 
 /* ─────────────── CHAT ─────────────── */
 app.post('/api/chat', async (c) => {
-  const body = await c.req.json()
-  const userText = body.messages?.at(-1)?.content ?? ''
-  const now = Date.now()
+  try {
+    const body = await c.req.json()
+    const userText = body.messages?.at(-1)?.content ?? ''
+    const now = Date.now()
 
-  const agent = new SuperAgent(c.env)
-  const assistantText = await agent.run({
-    userId: 'default',
-    sessionId: 'default',
-    query: userText,
-  })
+    const agent = new SuperAgent(c.env)
+    const assistantText = await agent.run({
+      userId: 'default',
+      sessionId: 'default',
+      query: userText,
+    })
 
-  await c.env.DB.prepare(
-    `INSERT INTO conversations (role, content, ts)
-     VALUES (?, ?, ?), (?, ?, ?)`
-  )
-    .bind('user', userText, now, 'assistant', assistantText, now + 1)
-    .run()
+    await c.env.DB.prepare(
+      `INSERT INTO conversations (role, content, ts)
+       VALUES (?, ?, ?), (?, ?, ?)`
+    )
+      .bind('user', userText, now, 'assistant', assistantText, now + 1)
+      .run()
 
-  return c.json({
-    messages: [
-      { role: 'user', content: userText },
-      { role: 'assistant', content: assistantText },
-    ],
-  })
+    return c.json({
+      messages: [
+        { role: 'user', content: userText },
+        { role: 'assistant', content: assistantText },
+      ],
+    })
+  } catch (err: any) {
+    console.error('CHAT ERROR:', err)
+
+    // ✅ ALWAYS return JSON
+    return c.json(
+      {
+        error: 'Internal server error',
+        detail: err?.message ?? String(err),
+      },
+      500
+    )
+  }
 })
 
 /* ─────────────── HISTORY ─────────────── */
