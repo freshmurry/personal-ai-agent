@@ -103,7 +103,7 @@ export class BrowserTool {
   // ─────────────────────────────────────────────────────────────────────────────
   private async fallbackSearch(query: string): Promise<SearchResult[]> {
     try {
-      const result: any = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+      const result: any = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
         messages: [
           {
             role: 'system',
