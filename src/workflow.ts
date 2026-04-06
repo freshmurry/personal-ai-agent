@@ -37,7 +37,7 @@ export class AutomationWorkflow extends AgentWorkflow<
     })
 
     const classification = await step.do('classify', async () => {
-      const result: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+      const result: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
         messages: [
           { role: 'system', content: 'Reply with only SIMPLE or COMPLEX.' },
           { role: 'user', content: params.instructions ?? '' },
@@ -55,7 +55,7 @@ export class AutomationWorkflow extends AgentWorkflow<
           const context = Array.isArray(searchResults)
             ? searchResults.map((r: any) => `${r.title}: ${r.snippet}`).join('\n')
             : JSON.stringify(searchResults).slice(0, 2000)
-          const aiResult: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+          const aiResult: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
             messages: [
               {
                 role: 'system',
@@ -69,7 +69,7 @@ export class AutomationWorkflow extends AgentWorkflow<
           // fallthrough to simple
         }
       }
-      const aiResult: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+      const aiResult: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
         messages: [
           { role: 'user', content: params.instructions ?? 'No instructions provided.' },
         ],
