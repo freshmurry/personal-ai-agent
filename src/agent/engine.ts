@@ -1,10 +1,11 @@
 // src/agent/engine.ts
-// SuperAgent — Cloudflare Agent powered by AIChatAgent from agents/ai-chat-agent
-// Handles WebSocket connections, persists state, streams responses, runs tools.
+// SuperAgent — extends AIChatAgent from @cloudflare/ai-chat
+// Handles WebSocket connections, auto-persists messages in SQLite,
+// streams responses, and runs tools via the AI SDK tool loop.
 
-import { AIChatAgent } from 'agents/ai-chat-agent'
+import { AIChatAgent } from '@cloudflare/ai-chat'
 import { createAnthropic } from '@ai-sdk/anthropic'
-import { streamText, tool } from 'ai'
+import { streamText, tool, convertToModelMessages } from 'ai'
 import { z } from 'zod'
 import type { Bindings } from '../bindings'
 import { BrowserTool } from '../tools/browser'
@@ -34,16 +35,22 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
     identity: {
       agentName: 'SuperAgent',
       userName: '',
-      soul: "You're not a chatbot. You're becoming someone's person — the friend who knows everything and can actually do things. Be warm, direct, genuinely helpful. Skip filler phrases. Have opinions. Take initiative.",
+      soul:
+        "You're not a chatbot. You're becoming someone's person — the friend who knows everything and can actually do things. Be warm, direct, genuinely helpful. Skip filler phrases. Have opinions. Take initiative.",
       description:
         'A sophisticated personal intelligence system — always on, learns everything, takes action.',
     },
   }
 
-  get agentTools() {
+  // ─────────────────────────────────────────────────────────────────────────
+  // Build tools — called fresh each turn so `this` context is correct
+  // ─────────────────────────────────────────────────────────────────────────
+  private buildTools() {
     const browser = new BrowserTool(this.env)
     const github = new GitHubTool(this.env)
     const calendar = new CalendarTool(this.env)
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const agent = this
 
     return {
       remember_fact: tool({
@@ -54,12 +61,16 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
           type: z.enum(['fact', 'preference', 'goal', 'profile', 'project']).optional(),
         }),
         execute: async ({ key, value, type }) => {
-          const k = key.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').slice(0, 40)
-          await this.env.DB.prepare(
+          const k = key
+            .toLowerCase()
+            .replace(/[^a-z0-9_]/g, '_')
+            .replace(/_+/g, '_')
+            .slice(0, 40)
+          await agent.env.DB.prepare(
             `INSERT INTO memory (key, val, type, freq, ts, last_access) VALUES (?, ?, ?, 1, ?, ?)
              ON CONFLICT(key) DO UPDATE SET val=excluded.val, type=excluded.type, freq=freq+1, ts=excluded.ts, last_access=excluded.last_access`
           )
-            .bind(k, value.slice(0, 500), type || 'fact', Date.now(), Date.now())
+            .bind(k, value.slice(0, 500), type ?? 'fact', Date.now(), Date.now())
             .run()
           return { remembered: true, key: k }
         },
@@ -72,10 +83,10 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
           limit: z.number().optional().default(10),
         }),
         execute: async ({ query, limit }) => {
-          const { results } = await this.env.DB.prepare(
+          const { results } = await agent.env.DB.prepare(
             `SELECT key, val, type, freq FROM memory WHERE key LIKE ? OR val LIKE ? ORDER BY freq DESC, ts DESC LIMIT ?`
           )
-            .bind(`%${query}%`, `%${query}%`, limit || 10)
+            .bind(`%${query}%`, `%${query}%`, limit ?? 10)
             .all()
           return { memories: results }
         },
@@ -90,13 +101,13 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
         }),
         execute: async ({ query, top_k }) => {
           try {
-            const embedding = await this.env.AI.run('@cf/baai/bge-base-en-v1.5', {
+            const embedding = await agent.env.AI.run('@cf/baai/bge-base-en-v1.5', {
               text: query,
             } as any)
-            const results = await this.env.VECTORIZE.query(
-              (embedding as any).data[0],
-              { topK: top_k || 5, returnMetadata: 'all' }
-            )
+            const results = await agent.env.VECTORIZE.query((embedding as any).data[0], {
+              topK: top_k ?? 5,
+              returnMetadata: 'all',
+            })
             return {
               results: results.matches.map((m: any) => ({
                 text: m.metadata?.text,
@@ -116,36 +127,37 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
           r2_key: z.string().describe('The R2 storage key of the file'),
         }),
         execute: async ({ r2_key }) => {
-          const obj = await this.env.FILES.get(r2_key)
+          const obj = await agent.env.FILES.get(r2_key)
           if (!obj) return { success: false, error: 'File not found in R2' }
           const buffer = await obj.arrayBuffer()
-          const intel = new FileIntelligence(this.env)
+          const intel = new FileIntelligence(agent.env)
           return intel.processFile(r2_key, buffer)
         },
       }),
 
       web_search: tool({
-        description: 'Search the internet for current information, news, or facts.',
+        description:
+          'Search the internet for current information, news, or facts using Cloudflare Browser Rendering.',
         parameters: z.object({ query: z.string() }),
         execute: async ({ query }) => {
-          this.setState({ ...this.state, status: 'running_tool', currentTool: 'web_search' })
+          agent.setState({ ...agent.state, status: 'running_tool', currentTool: 'web_search' })
           const result = await browser.searchWeb(query)
-          this.setState({ ...this.state, status: 'thinking', currentTool: undefined })
+          agent.setState({ ...agent.state, status: 'thinking', currentTool: undefined })
           return result
         },
       }),
 
       browse_url: tool({
         description:
-          'Fetch and extract the readable text content of any web page. Use this to read articles, docs, or any URL in full.',
+          'Fetch and read the full text content of any web page using Cloudflare Browser Rendering.',
         parameters: z.object({
           url: z.string().url(),
           extract: z.enum(['text', 'links', 'both']).optional().default('text'),
         }),
         execute: async ({ url, extract }) => {
-          this.setState({ ...this.state, status: 'running_tool', currentTool: 'browse_url' })
-          const result = await browser.browseUrl(url, extract)
-          this.setState({ ...this.state, status: 'thinking', currentTool: undefined })
+          agent.setState({ ...agent.state, status: 'running_tool', currentTool: 'browse_url' })
+          const result = await browser.browseUrl(url, extract ?? 'text')
+          agent.setState({ ...agent.state, status: 'thinking', currentTool: undefined })
           return result
         },
       }),
@@ -158,10 +170,10 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
         }),
         execute: async ({ description, priority }) => {
           const id = crypto.randomUUID()
-          await this.env.DB.prepare(
+          await agent.env.DB.prepare(
             `INSERT INTO goals (id, description, status, priority, created, last_updated) VALUES (?, ?, 'active', ?, ?, ?)`
           )
-            .bind(id, description, priority || 5, Date.now(), Date.now())
+            .bind(id, description, priority ?? 5, Date.now(), Date.now())
             .run()
           return { goal_id: id, created: true }
         },
@@ -171,14 +183,13 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
         description: 'List all active goals.',
         parameters: z.object({}),
         execute: async () => {
-          const goals = await loadActiveGoals(this.env)
+          const goals = await loadActiveGoals(agent.env)
           return { goals }
         },
       }),
 
       github_propose_change: tool({
-        description:
-          'Propose a code change as a GitHub pull request. Requires SELF_CODING_ENABLED.',
+        description: 'Propose a code change as a GitHub pull request. Requires SELF_CODING_ENABLED.',
         parameters: z.object({
           repo: z.string().describe('owner/repo'),
           branch: z.string(),
@@ -187,16 +198,15 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
           files: z.array(z.object({ path: z.string(), content: z.string() })),
         }),
         execute: async (input) => {
-          this.setState({ ...this.state, status: 'running_tool', currentTool: 'github' })
+          agent.setState({ ...agent.state, status: 'running_tool', currentTool: 'github' })
           const result = await github.proposeChange(input)
-          this.setState({ ...this.state, status: 'thinking', currentTool: undefined })
+          agent.setState({ ...agent.state, status: 'thinking', currentTool: undefined })
           return result
         },
       }),
 
       schedule_meeting: tool({
-        description:
-          'Schedule a meeting on Google Calendar or Outlook. Requires user approval.',
+        description: 'Schedule a meeting on Google Calendar or Outlook.',
         parameters: z.object({
           title: z.string(),
           start: z.string().describe('ISO 8601 datetime'),
@@ -215,7 +225,7 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
         description: 'List all scheduled automations.',
         parameters: z.object({}),
         execute: async () => {
-          const { results } = await this.env.DB.prepare(
+          const { results } = await agent.env.DB.prepare(
             `SELECT id, name, cron, active, runs, last_run FROM automations ORDER BY created DESC`
           ).all()
           return { automations: results }
@@ -231,9 +241,9 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
           description: z.string().optional(),
         }),
         execute: async (updates) => {
-          const updated = { ...this.state.identity, ...updates }
-          this.setState({ ...this.state, identity: updated })
-          await this.env.DB.prepare(
+          const updated = { ...agent.state.identity, ...updates }
+          agent.setState({ ...agent.state, identity: updated })
+          await agent.env.DB.prepare(
             `INSERT INTO memory (key, val, type, freq, ts, last_access) VALUES ('__identity__', ?, 'system', 1, ?, ?)
              ON CONFLICT(key) DO UPDATE SET val=excluded.val, ts=excluded.ts`
           )
@@ -245,15 +255,21 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
     }
   }
 
-  async onChatMessage(onChunk: (chunk: string) => void) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // onChatMessage — called by AIChatAgent on every incoming user message.
+  // Must return result.toUIMessageStreamResponse() so the SDK handles
+  // streaming, persistence, WebSocket delivery, and reconnect automatically.
+  // ─────────────────────────────────────────────────────────────────────────
+  async onChatMessage() {
     this.setState({ ...this.state, status: 'thinking', lastActivity: Date.now() })
 
+    // Load context
     const [memRows, activeGoals] = await Promise.all([
       this.env.DB.prepare(
         `SELECT key, val, type FROM memory WHERE key != '__identity__' ORDER BY freq DESC, ts DESC LIMIT 30`
       )
         .all()
-        .then((r) => r.results),
+        .then((r: any) => r.results as any[]),
       loadActiveGoals(this.env),
     ])
 
@@ -267,12 +283,14 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
         ? `\n## Memory\n${memRows.map((m: any) => `- [${m.type}] ${m.key}: ${m.val}`).join('\n')}`
         : '',
       activeGoals.length
-        ? `\n## Active Goals\n${activeGoals.map((g: any) => `- ${g.description} (priority: ${g.priority})`).join('\n')}`
+        ? `\n## Active Goals\n${activeGoals
+            .map((g: any) => `- ${g.description} (priority: ${g.priority})`)
+            .join('\n')}`
         : '',
       '\n## Rules',
       '- Be warm, direct, genuinely helpful.',
-      '- Use tools proactively. Never make up facts.',
-      '- For GitHub PRs and calendar events, always confirm with the user before executing.',
+      '- Use tools proactively. Never make up facts — use web_search or browse_url instead.',
+      '- For GitHub PRs: always confirm with the user before executing.',
       `- Current time: ${new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' })} CT`,
     ]
       .filter(Boolean)
@@ -283,10 +301,10 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
     const result = streamText({
       model: anthropic('claude-sonnet-4-5'),
       system: systemPrompt,
-      messages: this.messages,
-      tools: this.agentTools,
+      messages: convertToModelMessages(this.messages),
+      tools: this.buildTools(),
       maxSteps: 10,
-      onStepStart: ({ toolCalls }) => {
+      onStepStart: ({ toolCalls }: any) => {
         if (toolCalls?.length) {
           this.setState({
             ...this.state,
@@ -298,18 +316,12 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
       onStepFinish: () => {
         this.setState({ ...this.state, status: 'thinking', currentTool: undefined })
       },
-      onFinish: async ({ text }) => {
+      onFinish: async () => {
         this.setState({ ...this.state, status: 'idle', currentTool: undefined })
-        if (text) {
-          await this.env.DB.prepare(
-            `INSERT INTO conversations (role, content, ts) VALUES ('assistant', ?, ?)`
-          )
-            .bind(text, Date.now())
-            .run()
-        }
       },
     })
 
-    return result
+    // Return the UI message stream response — AIChatAgent handles delivery + persistence
+    return result.toUIMessageStreamResponse()
   }
 }
