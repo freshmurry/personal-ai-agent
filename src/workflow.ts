@@ -1,81 +1,71 @@
-// src/workflow.ts
-import type { ExecutionContext } from '@cloudflare/workers-types'
+// src/workflow.ts — extends AgentWorkflow from Cloudflare Agents SDK
+import { AgentWorkflow } from 'agents'
 import type { Bindings } from './bindings'
-
-import { Connectors } from './connectors'
+import { SuperAgent } from './agent/engine'
 import { BrowserTool } from './tools/browser'
 
-interface Params {
-  trigger: string
+interface AutomationParams {
+  trigger: 'cron' | 'manual' | 'entity'
+  automation_id?: string
   instructions?: string
-  payload?: any
   notify?: string
-  persona?: string
+  payload?: any
 }
 
-/**
- * Cloudflare Workflow
- * Discovered by Wrangler via exported class + run() method
- */
-export class AutomationWorkflow {
-  async run(
-    params: Params,
-    env: Bindings,
-    ctx: ExecutionContext
-  ): Promise<string> {
-    const { trigger, instructions, persona } = params
-    const now = new Date().toLocaleString()
+export class AutomationWorkflow extends AgentWorkflow<SuperAgent, AutomationParams, {}, Bindings> {
+  async run(event: any, step: any) {
+    const params: AutomationParams = event.payload ?? {}
+    const env = this.env as Bindings
 
-    // Step 1: initial status
-    await env.DB.prepare(
-      "INSERT INTO conversations (role, content, ts, summary) VALUES ('system', 'Thinking...', ?, 1)"
-    )
-      .bind(Date.now())
-      .run()
-
-    // Step 2: simple router
-    const classifier = await env.AI.run(
-      '@cf/meta/llama-3.1-8b-instruct',
-      {
-        messages: [
-          { role: 'system', content: 'SIMPLE or COMPLEX' },
-          { role: 'user', content: instructions ?? '' },
-        ],
+    await step.do('log_start', async () => {
+      if (params.automation_id) {
+        await env.DB.prepare(`UPDATE automations SET runs = runs + 1, last_run = ? WHERE id = ?`).bind(Date.now(), params.automation_id).run()
       }
-    )
+      return { started: Date.now() }
+    })
 
-    const route = classifier.response.toUpperCase().includes('COMPLEX')
-      ? 'COMPLEX'
-      : 'SIMPLE'
+    const classification = await step.do('classify', async () => {
+      const result = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        messages: [
+          { role: 'system', content: 'Reply with only SIMPLE or COMPLEX.' },
+          { role: 'user', content: params.instructions ?? '' },
+        ],
+      })
+      return { route: result.response?.toUpperCase().includes('COMPLEX') ? 'COMPLEX' : 'SIMPLE' }
+    })
 
-    // SIMPLE path
-    if (route === 'SIMPLE') {
-      const result = await env.AI.run(
-        '@cf/meta/llama-3.1-8b-instruct',
-        {
-          messages: [{ role: 'user', content: instructions ?? '' }],
-        }
-      )
+    const result = await step.do('execute', async () => {
+      if (classification.route === 'COMPLEX' && env.BRAVE_API_KEY) {
+        try {
+          const browser = new BrowserTool(env)
+          const searchResults = await browser.searchWeb(params.instructions ?? '')
+          const context = Array.isArray(searchResults)
+            ? searchResults.map((r: any) => `${r.title}: ${r.description}`).join('\n')
+            : ''
+          const aiResult = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+            messages: [
+              { role: 'system', content: 'You are SuperAgent. Use the context to answer accurately.' },
+              { role: 'user', content: `Context:\n${context}\n\nTask: ${params.instructions}` },
+            ],
+          })
+          return { response: aiResult.response, route: 'COMPLEX' }
+        } catch {}
+      }
+      const aiResult = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        messages: [{ role: 'user', content: params.instructions ?? '' }],
+      })
+      return { response: aiResult.response, route: 'SIMPLE' }
+    })
 
-      await env.DB.prepare(
-        "INSERT INTO conversations (role, content, ts) VALUES ('assistant', ?, ?)"
-      )
-        .bind(result.response, Date.now())
-        .run()
+    await step.do('log_result', async () => {
+      await env.DB.prepare(`INSERT INTO conversations (role, content, ts, summary) VALUES ('assistant', ?, ?, 1)`).bind(`[Automation] ${result.response}`, Date.now()).run()
+      if (params.automation_id) {
+        await env.DB.prepare(`UPDATE automations SET successes = successes + 1 WHERE id = ?`).bind(params.automation_id).run()
+      }
+      return { logged: true }
+    })
 
-      return result.response
-    }
-
-    // COMPLEX placeholder
-    const connectors = new Connectors(env)
-    const browser = new BrowserTool(env)
-
-    await env.DB.prepare(
-      "UPDATE conversations SET content = 'Finished' WHERE summary = 1"
-    )
-      .bind()
-      .run()
-
-    return 'Done'
+    await step.reportComplete({ response: result.response })
+    return result.response
   }
 }
