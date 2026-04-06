@@ -19,6 +19,10 @@ bindings = [
 tag = "v4"
 new_sqlite_classes = ["SuperAgent"]
 
+[[migrations]]
+tag = "v5"
+deleted_classes = ["AgentDO", "SessionDO"]
+
 [[d1_databases]]
 binding       = "DB"
 database_name = "superagent-db"
