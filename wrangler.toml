@@ -89,4 +89,6 @@ local_protocol = "http"
 # ─── OBSERVABILITY ────────────────────────────────────────────────────────────────
 
 [observability]
+[observability.logs]
 enabled = false
+invocation_logs = true
