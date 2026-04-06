@@ -1,98 +1,81 @@
 // src/agent/registry.ts
+// Tool registry — wires up all tool classes.
+// NOTE: BrowserTool now uses Cloudflare Browser Rendering REST API (no puppeteer).
 
-import { BrowserTool } from '../tools/browser';
-import { GitHubTool } from '../tools/github';
-import { TwitterTool } from '../tools/twitter';
-import { CalendarTool } from '../tools/calendar';
+import { BrowserTool } from '../tools/browser'
+import { GitHubTool } from '../tools/github'
+import { CalendarTool } from '../tools/calendar'
 
 type WebSearchInput = {
-  query: string;
-};
+  query: string
+}
 
 type GitHubChangeInput = {
-  repo: string;
-  branch: string;
-  title: string;
-  description: string;
-  files: Array<{
-    path: string;
-    content: string;
-  }>;
-};
-
-type TwitterPostInput = {
-  text: string;
-  confidence: number;
-  approvalId?: string;
-};
+  repo: string
+  branch: string
+  title: string
+  description: string
+  files: Array<{ path: string; content: string }>
+}
 
 type CalendarScheduleInput = {
-  title: string;
-  start: string;
-  end: string;
-  timezone: string;
-  attendees?: string[];
-  description?: string;
-  confidence?: number;
-  provider?: 'google' | 'outlook';
-  approvalId?: string;
-};
+  title: string
+  start: string
+  end: string
+  timezone: string
+  attendees?: string[]
+  description?: string
+  confidence?: number
+  provider?: 'google' | 'outlook'
+  approvalId?: string
+}
 
 export function registerAgentTools(agent: any, env: any) {
-  const browser = new BrowserTool(env);
-  const github = new GitHubTool(env);
-  const twitter = new TwitterTool(env);
-  const calendar = new CalendarTool(env);
+  const browser = new BrowserTool(env)
+  const github = new GitHubTool(env)
+  const calendar = new CalendarTool(env)
 
-  // 🌐 Web search
+  // 🌐 Web search via Cloudflare Browser Rendering
   agent.addTool({
     name: 'web_search',
-    description: 'Search the internet',
+    description: 'Search the internet using Cloudflare Browser Rendering',
     risk: 'low',
     schema: { query: 'string' },
     handler: async (input: WebSearchInput) => {
-      return browser.searchWeb(input.query);
+      return browser.searchWeb(input.query)
     },
-  });
+  })
 
-  // 🧑‍💻 Self‑coding via GitHub PR
+  // 🌐 Browse a specific URL
+  agent.addTool({
+    name: 'browse_url',
+    description: 'Fetch and read the content of any web page',
+    risk: 'low',
+    schema: { url: 'string', extract: 'string?' },
+    handler: async (input: { url: string; extract?: 'text' | 'links' | 'both' }) => {
+      return browser.browseUrl(input.url, input.extract ?? 'text')
+    },
+  })
+
+  // 🧑‍💻 Self-coding via GitHub PR
   agent.addTool({
     name: 'github_propose_change',
-    description: 'Create GitHub pull requests',
+    description: 'Create GitHub pull requests for code changes',
     risk: 'high',
     schema: {},
     handler: async (input: GitHubChangeInput) => {
-      return github.proposeChange(input);
+      return github.proposeChange(input)
     },
-  });
+  })
 
-  // 🐦 Twitter / X posting (approval + confidence gated)
-  agent.addTool({
-    name: 'twitter_post',
-    description: 'Post a tweet (approval + confidence gated)',
-    risk: 'high',
-    schema: {
-      text: 'string',
-      confidence: 'number',
-      approvalId: 'string?',
-    },
-    handler: async (input: TwitterPostInput) => {
-      return twitter.postTweet(
-        input.text,
-        input.confidence,
-        input.approvalId
-      );
-    },
-  });
-
-  // 📅 Calendar scheduling (DST + approval aware)
+  // 📅 Calendar scheduling
   agent.addTool({
     name: 'calendar_schedule_meeting',
-    description: 'Schedule a meeting on a calendar',
+    description: 'Schedule a meeting on Google Calendar or Outlook',
     risk: 'medium',
     schema: {},
     handler: async (input: CalendarScheduleInput) => {
-      return calendar.scheduleMeeting(input);
+      return calendar.scheduleMeeting(input)
     },
-  });
+  })
 }
