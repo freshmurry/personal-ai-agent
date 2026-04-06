@@ -12,12 +12,12 @@
   },
   "dependencies": {
     "agents": "^0.9.0",
-    "@cloudflare/ai-chat": "^0.3.2",
+    "ai": "^6.0.0",
+    "@ai-sdk/anthropic": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0",
     "@cloudflare/puppeteer": "^0.0.35",
-    "ai": "^4.3.16",
-    "@ai-sdk/anthropic": "^1.2.12",
     "hono": "^4.12.10",
-    "zod": "^3.24.2"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260317.1",
