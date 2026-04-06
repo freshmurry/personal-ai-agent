@@ -1,5 +1,4 @@
 // src/workflow.ts
-import { Workflow } from '@cloudflare/workers-types'
 import type { ExecutionContext } from '@cloudflare/workers-types'
 import type { Bindings } from './bindings'
 
@@ -14,7 +13,11 @@ interface Params {
   persona?: string
 }
 
-export class AutomationWorkflow extends Workflow<Params> {
+/**
+ * Cloudflare Workflow
+ * Discovered by Wrangler via exported class + run() method
+ */
+export class AutomationWorkflow {
   async run(
     params: Params,
     env: Bindings,
@@ -23,14 +26,14 @@ export class AutomationWorkflow extends Workflow<Params> {
     const { trigger, instructions, persona } = params
     const now = new Date().toLocaleString()
 
-    /* ─────────── STEP 1: Initial UX status ─────────── */
+    // Step 1: initial status
     await env.DB.prepare(
       "INSERT INTO conversations (role, content, ts, summary) VALUES ('system', 'Thinking...', ?, 1)"
     )
       .bind(Date.now())
       .run()
 
-    /* ─────────── STEP 2: ROUTER ─────────── */
+    // Step 2: simple router
     const classifier = await env.AI.run(
       '@cf/meta/llama-3.1-8b-instruct',
       {
@@ -41,17 +44,18 @@ export class AutomationWorkflow extends Workflow<Params> {
       }
     )
 
-    const route = classifier.response
-      .toUpperCase()
-      .includes('COMPLEX')
+    const route = classifier.response.toUpperCase().includes('COMPLEX')
       ? 'COMPLEX'
       : 'SIMPLE'
 
-    /* ─────────── SIMPLE PATH ─────────── */
+    // SIMPLE path
     if (route === 'SIMPLE') {
-      const result = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-        messages: [{ role: 'user', content: instructions ?? '' }],
-      })
+      const result = await env.AI.run(
+        '@cf/meta/llama-3.1-8b-instruct',
+        {
+          messages: [{ role: 'user', content: instructions ?? '' }],
+        }
+      )
 
       await env.DB.prepare(
         "INSERT INTO conversations (role, content, ts) VALUES ('assistant', ?, ?)"
@@ -62,11 +66,10 @@ export class AutomationWorkflow extends Workflow<Params> {
       return result.response
     }
 
-    /* ─────────── COMPLEX PATH ─────────── */
+    // COMPLEX placeholder
     const connectors = new Connectors(env)
     const browser = new BrowserTool(env)
 
-    // (Example placeholder for real work)
     await env.DB.prepare(
       "UPDATE conversations SET content = 'Finished' WHERE summary = 1"
     )
