@@ -1,6 +1,6 @@
 {
-  "name": "personal-ai-agent",
-  "version": "3.2.0",
+  "name": "agent-apex",
+  "version": "4.0.0",
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
@@ -13,6 +13,7 @@
   "dependencies": {
     "agents": "^0.9.0",
     "@cloudflare/ai-chat": "^0.3.2",
+    "workers-ai-provider": "^3.1.10",
     "ai": "^6.0.0",
     "@ai-sdk/anthropic": "^3.0.0",
     "@ai-sdk/openai": "^3.0.0",
