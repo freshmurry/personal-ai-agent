@@ -85,3 +85,8 @@ crons = [
 [dev]
 port           = 8787
 local_protocol = "http"
+
+# ─── OBSERVABILITY ────────────────────────────────────────────────────────────────
+
+[observability]
+enabled = false
