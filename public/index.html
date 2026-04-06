@@ -3,510 +3,843 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Agent Apex — SuperAgent</title>
+  <title>Agent Apex</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
+    /* ── Reset & Base ──────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #0d0d0f;
-      --surface: #18181b;
-      --surface2: #1e1e22;
-      --border: #2a2a30;
-      --accent: #7c3aed;
-      --accent2: #a855f7;
-      --green: #22c55e;
-      --red: #ef4444;
-      --yellow: #eab308;
-      --text: #f4f4f5;
-      --muted: #71717a;
-      --radius: 10px;
+      --bg:        #f4f4f5;
+      --surface:   #ffffff;
+      --surface2:  #f9f9f9;
+      --border:    #e4e4e7;
+      --border2:   #d1d1d6;
+      --text:      #18181b;
+      --text2:     #52525b;
+      --muted:     #a1a1aa;
+      --accent:    #18181b;
+      --accent2:   #3f3f46;
+      --green:     #16a34a;
+      --red:       #dc2626;
+      --yellow:    #d97706;
+      --blue:      #2563eb;
+      --radius:    10px;
+      --shadow:    0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; height: 100vh; display: flex; overflow: hidden; }
-    
-    /* ── Sidebar ── */
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      display: flex;
+    }
+
+    /* ── Scrollbars ────────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
+
+    /* ── Layout ────────────────────────────────────────────────────────────── */
+    #app { display: flex; width: 100%; height: 100%; }
+
+    /* ── Sidebar ────────────────────────────────────────────────────────────── */
     .sidebar {
-      width: 220px; min-width: 220px; background: var(--surface); border-right: 1px solid var(--border);
-      display: flex; flex-direction: column; padding: 16px 0;
+      width: 232px; min-width: 232px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      transition: width 0.2s ease, min-width 0.2s ease;
     }
-    .logo { padding: 0 16px 20px; display: flex; align-items: center; gap: 10px; }
-    .logo-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-    .logo-text { font-weight: 700; font-size: 15px; }
-    .logo-sub { font-size: 10px; color: var(--muted); }
-    nav { flex: 1; }
-    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; cursor: pointer; border-radius: 0; font-size: 13px; color: var(--muted); transition: all 0.15s; }
-    .nav-item:hover { background: var(--surface2); color: var(--text); }
-    .nav-item.active { background: rgba(124,58,237,0.15); color: var(--accent2); border-right: 2px solid var(--accent); }
-    .nav-icon { font-size: 15px; width: 20px; text-align: center; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-left: auto; animation: pulse 2s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-    .sidebar-footer { padding: 16px; border-top: 1px solid var(--border); }
-    .agent-status { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-    
-    /* ── Main ── */
-    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .sidebar.collapsed { width: 60px; min-width: 60px; }
+
+    .sidebar-header {
+      padding: 16px 14px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    .logo-ring {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg, #18181b 0%, #52525b 100%);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 800; font-size: 15px;
+      flex-shrink: 0; letter-spacing: -0.5px;
+    }
+    .logo-info { flex: 1; overflow: hidden; }
+    .logo-name { font-weight: 700; font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .logo-sub  { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .collapse-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); padding: 4px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .collapse-btn:hover { color: var(--text2); background: var(--surface2); }
+
+    .nav { flex: 1; padding: 8px 0; overflow-y: auto; }
+    .nav-section {
+      padding: 14px 14px 4px;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.07em;
+      color: var(--muted); text-transform: uppercase;
+      white-space: nowrap; overflow: hidden;
+    }
+    .sidebar.collapsed .nav-section { opacity: 0; height: 0; padding: 0; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 14px; cursor: pointer;
+      color: var(--text2); font-size: 13px; font-weight: 500;
+      white-space: nowrap; overflow: hidden;
+      border-right: 2px solid transparent;
+      transition: background 0.1s, color 0.1s;
+      position: relative;
+    }
+    .nav-item:hover { background: var(--bg); color: var(--text); }
+    .nav-item.active {
+      background: var(--bg);
+      color: var(--text);
+      font-weight: 600;
+      border-right-color: var(--accent);
+    }
+    .nav-item svg { flex-shrink: 0; }
+    .nav-label { overflow: hidden; text-overflow: ellipsis; }
+    .sidebar.collapsed .nav-label { display: none; }
+    .sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
+    .sidebar.collapsed .nav-item.active { border-right-color: transparent; border-left: 2px solid var(--accent); }
+
+    .sidebar-footer {
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    .user-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--accent2);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 11px; font-weight: 700;
+      flex-shrink: 0;
+    }
+    .user-name { font-size: 12px; font-weight: 500; color: var(--text2); white-space: nowrap; }
+    .sidebar.collapsed .user-name { display: none; }
+    .sidebar.collapsed .sidebar-footer { justify-content: center; padding: 12px 0; }
+
+    /* ── Main ────────────────────────────────────────────────────────────────── */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+    /* ── Top Bar ─────────────────────────────────────────────────────────────── */
+    .top-bar {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    .top-title { font-weight: 700; font-size: 15px; color: var(--text); }
+    .top-spacer { flex: 1; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px; border-radius: 20px;
+      font-size: 11px; font-weight: 600;
+    }
+    .badge-dark  { background: var(--text); color: #fff; }
+    .badge-green { background: #dcfce7; color: var(--green); }
+    .badge-grey  { background: var(--bg); color: var(--text2); border: 1px solid var(--border); }
+    .badge-blue  { background: #dbeafe; color: var(--blue); }
+
+    /* ── Tabs (panel) ────────────────────────────────────────────────────────── */
     .tab { display: none; flex: 1; overflow: hidden; flex-direction: column; }
     .tab.active { display: flex; }
-    
-    /* ── Chat Tab ── */
-    .chat-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; background: var(--surface); }
-    .chat-header h2 { font-size: 14px; font-weight: 600; }
-    .chat-header .sub { font-size: 11px; color: var(--muted); }
-    .loop-badge { background: rgba(124,58,237,0.2); border: 1px solid rgba(124,58,237,0.4); color: var(--accent2); padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
-    .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-    .message { display: flex; gap: 10px; max-width: 90%; }
-    .message.user { flex-direction: row-reverse; align-self: flex-end; }
-    .message.user .bubble { background: var(--accent); border-radius: 16px 4px 16px 16px; }
-    .message.assistant .bubble { background: var(--surface2); border-radius: 4px 16px 16px 16px; }
-    .avatar { width: 28px; height: 28px; min-width: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; margin-top: 2px; }
-    .avatar.agent { background: linear-gradient(135deg, var(--accent), var(--accent2)); }
-    .avatar.user { background: var(--surface2); border: 1px solid var(--border); }
-    .bubble { padding: 10px 14px; font-size: 13.5px; line-height: 1.55; }
-    .bubble code { background: rgba(0,0,0,0.4); padding: 1px 5px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', monospace; }
-    .bubble pre { background: rgba(0,0,0,0.4); padding: 10px; border-radius: 6px; margin: 8px 0; overflow-x: auto; font-size: 11.5px; }
-    .bubble strong { color: var(--accent2); }
-    .tool-call { margin: 4px 0; padding: 6px 10px; background: rgba(124,58,237,0.1); border: 1px solid rgba(124,58,237,0.2); border-radius: 6px; font-size: 11px; color: var(--accent2); display: flex; align-items: center; gap: 6px; }
-    .thinking { color: var(--muted); font-style: italic; font-size: 12px; display: flex; align-items: center; gap: 6px; }
-    .dots span { animation: blink 1.2s infinite; } .dots span:nth-child(2) { animation-delay: 0.2s; } .dots span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
-    .chat-input-area { padding: 16px 20px; border-top: 1px solid var(--border); background: var(--surface); }
-    .input-row { display: flex; gap: 10px; align-items: flex-end; }
-    .input-box { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; color: var(--text); font-size: 13.5px; resize: none; outline: none; min-height: 44px; max-height: 120px; font-family: inherit; line-height: 1.5; transition: border 0.2s; }
-    .input-box:focus { border-color: var(--accent); }
-    .input-box::placeholder { color: var(--muted); }
-    .send-btn { background: var(--accent); border: none; border-radius: 10px; width: 44px; height: 44px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; transition: all 0.15s; flex-shrink: 0; }
-    .send-btn:hover { background: var(--accent2); transform: scale(1.05); }
-    .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-    .clear-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 11px; color: var(--muted); cursor: pointer; }
-    .clear-btn:hover { color: var(--text); border-color: var(--muted); }
 
-    /* ── Panel tabs (Brain, Files, etc.) ── */
-    .panel-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
-    .panel-header h2 { font-size: 15px; font-weight: 700; }
-    .panel-header .desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
-    .panel-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-    
-    /* ── Cards ── */
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
-    .card-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
-    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-    .stat { background: var(--surface2); border-radius: 8px; padding: 12px; text-align: center; }
-    .stat-val { font-size: 22px; font-weight: 700; color: var(--accent2); }
-    .stat-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
-    
-    /* ── Memory ── */
-    .memory-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px; background: var(--surface2); border-radius: 8px; font-size: 12px; border: 1px solid transparent; transition: border 0.15s; }
-    .memory-item:hover { border-color: var(--border); }
-    .mem-key { color: var(--accent2); font-weight: 600; min-width: 120px; max-width: 140px; word-break: break-all; }
-    .mem-val { color: var(--text); flex: 1; opacity: 0.85; word-break: break-word; }
-    .mem-type { background: rgba(124,58,237,0.15); color: var(--accent2); padding: 1px 6px; border-radius: 4px; font-size: 10px; margin-left: auto; flex-shrink: 0; }
-    .mem-del { background: none; border: none; color: var(--muted); cursor: pointer; padding: 2px 4px; border-radius: 4px; font-size: 12px; }
-    .mem-del:hover { color: var(--red); }
-    
-    /* ── Plans ── */
-    .plan-item { background: var(--surface2); border-radius: 8px; padding: 12px; border-left: 3px solid transparent; }
-    .plan-item.completed { border-color: var(--green); }
-    .plan-item.failed { border-color: var(--red); }
-    .plan-item.running { border-color: var(--yellow); }
-    .plan-item.pending { border-color: var(--accent); }
-    .plan-goal { font-size: 13px; font-weight: 600; }
-    .plan-meta { font-size: 11px; color: var(--muted); margin-top: 4px; display: flex; gap: 12px; }
-    .plan-steps { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
-    .plan-step { display: flex; align-items: center; gap: 6px; font-size: 11px; padding: 4px 8px; background: rgba(0,0,0,0.2); border-radius: 4px; }
-    .step-status { font-size: 10px; }
-    
-    /* ── Tool Log ── */
-    .log-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface2); border-radius: 6px; font-size: 11px; }
-    .log-tool { color: var(--accent2); font-weight: 600; min-width: 130px; }
-    .log-status { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .log-status.success { background: var(--green); }
-    .log-status.error { background: var(--red); }
-    .log-dur { color: var(--muted); min-width: 50px; text-align: right; }
-    .log-ts { color: var(--muted); margin-left: auto; }
-    
-    /* ── Goals ── */
-    .goal-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--surface2); border-radius: 8px; }
-    .goal-p { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
-    .goal-desc { flex: 1; font-size: 13px; }
-    .goal-status { font-size: 10px; color: var(--muted); margin-top: 2px; }
-    .goal-actions { display: flex; gap: 6px; }
-    .btn-sm { padding: 3px 8px; border-radius: 5px; font-size: 11px; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
-    .btn-sm:hover { color: var(--text); border-color: var(--muted); }
-    .btn-sm.danger:hover { color: var(--red); border-color: var(--red); }
-    
-    /* ── Files ── */
-    .drop-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 30px; text-align: center; color: var(--muted); font-size: 13px; cursor: pointer; transition: all 0.2s; }
-    .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); color: var(--accent2); background: rgba(124,58,237,0.05); }
-    .file-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface2); border-radius: 8px; font-size: 12px; }
-    .file-icon { font-size: 18px; flex-shrink: 0; }
-    .file-name { flex: 1; font-weight: 500; word-break: break-all; }
-    .file-size { color: var(--muted); }
-    .file-actions { display: flex; gap: 6px; }
-    
-    /* ── Connectors ── */
-    .connector-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface2); border-radius: 8px; }
-    .connector-icon { font-size: 22px; width: 36px; text-align: center; }
-    .connector-name { flex: 1; font-size: 13px; font-weight: 600; }
-    .connector-status { font-size: 11px; color: var(--muted); }
-    .conn-btn { padding: 5px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; border: 1px solid; font-weight: 500; }
-    .conn-btn.connected { background: rgba(34,197,94,0.1); border-color: var(--green); color: var(--green); }
-    .conn-btn.disconnected { background: rgba(124,58,237,0.1); border-color: var(--accent); color: var(--accent2); }
-    
-    /* ── Approvals ── */
-    .approval-item { background: var(--surface2); border-radius: 8px; padding: 12px 14px; border-left: 3px solid var(--yellow); }
-    .approval-type { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--yellow); letter-spacing: 0.05em; }
-    .approval-preview { font-size: 12px; margin: 6px 0; }
-    .approval-actions { display: flex; gap: 8px; margin-top: 8px; }
-    .approve-btn { padding: 4px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; border: none; font-weight: 600; }
-    .approve-btn.yes { background: var(--green); color: #000; }
-    .approve-btn.no { background: var(--red); color: #fff; }
-    
-    /* ── Forms ── */
-    .form-row { display: flex; gap: 8px; align-items: stretch; }
-    .form-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 12px; outline: none; font-family: inherit; }
-    .form-input:focus { border-color: var(--accent); }
-    .form-select { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 12px; outline: none; }
-    .form-btn { padding: 8px 16px; background: var(--accent); border: none; border-radius: 8px; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-    .form-btn:hover { background: var(--accent2); }
-    
-    /* ── Tabs within panel ── */
-    .sub-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 20px; background: var(--surface); }
-    .sub-tab { padding: 10px 16px; font-size: 12px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-    .sub-tab.active { color: var(--accent2); border-color: var(--accent); }
-    .sub-panel { display: none; }
-    .sub-panel.active { display: flex; flex-direction: column; }
+    /* ── Panel body ──────────────────────────────────────────────────────────── */
+    .panel-body {
+      flex: 1; overflow-y: auto;
+      padding: 20px; display: flex; flex-direction: column; gap: 14px;
+    }
 
-    /* ── Misc ── */
-    .empty { text-align: center; color: var(--muted); font-size: 12px; padding: 30px; }
-    .badge { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; }
-    .badge.success { background: rgba(34,197,94,0.15); color: var(--green); }
-    .badge.error { background: rgba(239,68,68,0.15); color: var(--red); }
-    .badge.pending { background: rgba(234,179,8,0.15); color: var(--yellow); }
-    .badge.active { background: rgba(124,58,237,0.15); color: var(--accent2); }
-    .scroll-y { overflow-y: auto; }
-    ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .reflection { background: rgba(124,58,237,0.08); border: 1px solid rgba(124,58,237,0.2); border-radius: 6px; padding: 8px 10px; margin-top: 8px; font-size: 11px; color: var(--muted); }
-    .perf-bar { height: 4px; background: var(--surface2); border-radius: 2px; margin-top: 4px; overflow: hidden; }
-    .perf-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; }
+    /* ── Cards ───────────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .card-header {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 12px;
+    }
+    .card-title { font-weight: 600; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 10px; text-align: center; }
+    .stat-val { font-size: 24px; font-weight: 700; color: var(--text); }
+    .stat-lbl { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--surface); color: var(--text2);
+      font-size: 12px; font-weight: 500;
+      cursor: pointer; white-space: nowrap;
+      transition: all 0.1s;
+    }
+    .btn:hover { background: var(--bg); color: var(--text); border-color: var(--border2); }
+    .btn-dark { background: var(--text); color: #fff; border-color: var(--text); }
+    .btn-dark:hover { background: var(--accent2); }
+    .btn-danger { border-color: #fecaca; color: var(--red); }
+    .btn-danger:hover { background: #fff1f2; }
+    .btn-sm { padding: 3px 8px; font-size: 11px; }
+
+    /* ── Input ───────────────────────────────────────────────────────────────── */
+    .field-label { font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 5px; }
+    input.field, textarea.field, select.field {
+      width: 100%; padding: 8px 11px;
+      border: 1px solid var(--border); border-radius: 7px;
+      background: var(--surface); color: var(--text);
+      font-size: 13px; font-family: inherit; outline: none;
+      transition: border 0.15s;
+    }
+    input.field:focus, textarea.field:focus { border-color: var(--accent2); }
+    textarea.field { resize: vertical; }
+
+    /* ── Divider ─────────────────────────────────────────────────────────────── */
+    hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+    /* ── Tag / pill ──────────────────────────────────────────────────────────── */
+    .tag {
+      display: inline-flex; align-items: center;
+      padding: 2px 7px; border-radius: 4px;
+      font-size: 10px; font-weight: 600;
+      background: var(--bg); color: var(--text2);
+    }
+    .tag-fact        { background: #dbeafe; color: #1d4ed8; }
+    .tag-preference  { background: #f3e8ff; color: #7c3aed; }
+    .tag-goal        { background: #fef9c3; color: #854d0e; }
+    .tag-profile     { background: #dcfce7; color: #15803d; }
+    .tag-project     { background: #ffedd5; color: #c2410c; }
+    .tag-active      { background: #dcfce7; color: #15803d; }
+    .tag-completed   { background: #dbeafe; color: #1d4ed8; }
+    .tag-paused      { background: #fef9c3; color: #854d0e; }
+    .tag-failed      { background: #fee2e2; color: #991b1b; }
+    .tag-pending     { background: #fef9c3; color: #854d0e; }
+    .tag-running     { background: #dbeafe; color: #1d4ed8; }
+    .tag-cancelled   { background: var(--bg); color: var(--muted); }
+
+    /* ── Empty state ─────────────────────────────────────────────────────────── */
+    .empty { text-align: center; padding: 48px 20px; color: var(--muted); font-size: 13px; }
+    .empty-icon { font-size: 28px; margin-bottom: 8px; }
+
+    /* ── Search ──────────────────────────────────────────────────────────────── */
+    .search-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .filter-chip {
+      padding: 4px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 500; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text2);
+      transition: all 0.1s;
+    }
+    .filter-chip:hover, .filter-chip.active {
+      background: var(--text); color: #fff; border-color: var(--text);
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════════
+       CHAT
+    ══════════════════════════════════════════════════════════════════════════ */
+    .chat-messages {
+      flex: 1; overflow-y: auto;
+      padding: 24px 20px;
+      display: flex; flex-direction: column; gap: 18px;
+    }
+    .msg-row { display: flex; gap: 10px; max-width: 820px; }
+    .msg-row.user { flex-direction: row-reverse; align-self: flex-end; }
+
+    .msg-avatar {
+      width: 30px; height: 30px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+    }
+    .msg-avatar.agent { background: linear-gradient(135deg,#18181b,#52525b); color: #fff; }
+    .msg-avatar.user  { background: linear-gradient(135deg,#52525b,#a1a1aa); color: #fff; }
+
+    .msg-body { display: flex; flex-direction: column; gap: 4px; }
+    .bubble {
+      padding: 10px 14px;
+      font-size: 13.5px; line-height: 1.65;
+      box-shadow: var(--shadow);
+    }
+    .bubble.agent {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px 12px 12px 12px;
+      color: var(--text);
+    }
+    .bubble.user {
+      background: var(--text);
+      border: 1px solid var(--text);
+      border-radius: 12px 2px 12px 12px;
+      color: #fff;
+    }
+    .bubble code {
+      background: rgba(0,0,0,0.07);
+      padding: 1px 5px; border-radius: 4px;
+      font-size: 12px; font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .bubble.user code { background: rgba(255,255,255,0.15); }
+    .bubble pre {
+      background: #f4f4f5; padding: 12px; border-radius: 8px;
+      margin: 8px 0; overflow-x: auto; font-size: 12px;
+      font-family: 'SF Mono', 'Fira Code', monospace; line-height: 1.5;
+      border: 1px solid var(--border);
+    }
+    .bubble.user pre { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.15); color: #e4e4e7; }
+    .bubble strong { font-weight: 600; }
+    .bubble.user strong { color: #e4e4e7; }
+
+    .msg-meta {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; color: var(--muted);
+    }
+    .msg-meta.user { justify-content: flex-end; }
+    .copy-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: 11px;
+      display: flex; align-items: center; gap: 3px;
+      padding: 1px 4px; border-radius: 4px;
+    }
+    .copy-btn:hover { color: var(--text2); background: var(--bg); }
+
+    /* Tool call indicator */
+    .tool-call-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 10px; border-radius: 6px;
+      background: var(--bg); border: 1px solid var(--border);
+      font-size: 11px; color: var(--text2);
+      max-width: fit-content;
+    }
+    .tool-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    /* Typing dots */
+    .typing-wrap { display: flex; gap: 4px; padding: 6px 2px; align-items: center; }
+    .typing-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+      animation: typingBounce 1.2s infinite;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typingBounce { 0%,80%,100%{transform:scale(0.6);opacity:0.4} 40%{transform:scale(1);opacity:1} }
+
+    /* ── Chat input ──────────────────────────────────────────────────────────── */
+    .chat-input-wrap { padding: 14px 20px 16px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+    .input-row {
+      display: flex; align-items: flex-end; gap: 8px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 12px; padding: 10px 12px;
+      transition: border 0.15s;
+    }
+    .input-row:focus-within { border-color: var(--accent2); background: var(--surface); }
+    #chat-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-size: 14px; font-family: inherit;
+      resize: none; min-height: 22px; max-height: 120px; line-height: 1.5;
+    }
+    #chat-input::placeholder { color: var(--muted); }
+    #send-btn {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: var(--text); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: opacity 0.15s;
+    }
+    #send-btn:hover { opacity: 0.85; }
+    #send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .suggestions-row { display: flex; gap: 7px; margin-top: 10px; flex-wrap: wrap; }
+    .suggestion-chip {
+      padding: 5px 12px; border-radius: 20px;
+      background: var(--surface); border: 1px solid var(--border);
+      font-size: 12px; color: var(--text2); cursor: pointer;
+      transition: all 0.1s;
+    }
+    .suggestion-chip:hover { border-color: var(--accent2); color: var(--text); }
+
+    /* ══════════════════════════════════════════════════════════════════════════
+       BRAIN (Memory)
+    ══════════════════════════════════════════════════════════════════════════ */
+    .mem-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 9px; padding: 12px 14px;
+      box-shadow: var(--shadow);
+    }
+    .mem-row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .mem-key  { font-weight: 600; font-size: 13px; color: var(--text); flex: 1; }
+    .mem-val  { font-size: 12px; color: var(--text2); line-height: 1.55; }
+    .mem-footer { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--muted); }
+
+    /* ══════════════════════════════════════════════════════════════════════════
+       PLANS
+    ══════════════════════════════════════════════════════════════════════════ */
+    .plan-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 9px; overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .plan-header { padding: 12px 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+    .plan-header:hover { background: var(--surface2); }
+    .plan-goal  { flex: 1; font-weight: 600; font-size: 13px; color: var(--text); }
+    .plan-body  { border-top: 1px solid var(--border); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+    .step-row {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 6px 8px; border-radius: 6px; background: var(--surface2);
+      font-size: 12px;
+    }
+    .step-dot  { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+    .step-tool { font-weight: 600; color: var(--text); }
+    .step-why  { color: var(--muted); margin-left: 4px; }
+    .step-err  { color: var(--red); margin-top: 2px; }
+
+    /* ══════════════════════════════════════════════════════════════════════════
+       FILES
+    ══════════════════════════════════════════════════════════════════════════ */
+    .file-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 9px; padding: 12px 14px;
+      display: flex; align-items: center; gap: 12px;
+      box-shadow: var(--shadow);
+    }
+    .file-icon { width: 36px; height: 36px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .file-name { font-weight: 600; font-size: 13px; color: var(--text); }
+    .file-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ══════════════════════════════════════════════════════════════════════════
+       GOALS
+    ══════════════════════════════════════════════════════════════════════════ */
+    .goal-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 9px; padding: 14px;
+      box-shadow: var(--shadow);
+    }
+    .goal-row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .goal-desc { font-weight: 600; font-size: 13px; color: var(--text); flex: 1; }
+    .goal-progress { font-size: 12px; color: var(--text2); line-height: 1.5; }
+
+    /* ══════════════════════════════════════════════════════════════════════════
+       SETTINGS
+    ══════════════════════════════════════════════════════════════════════════ */
+    .settings-section { margin-bottom: 20px; }
+    .settings-title { font-weight: 700; font-size: 14px; color: var(--text); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    .field-group { margin-bottom: 14px; }
+
+    /* ── Toast ───────────────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 10px 16px; border-radius: 8px;
+      background: var(--text); color: #fff;
+      font-size: 13px; font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transform: translateY(20px); opacity: 0;
+      transition: all 0.25s; pointer-events: none; z-index: 999;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
   </style>
 </head>
 <body>
-<!-- ─── Sidebar ─── -->
-<aside class="sidebar">
-  <div class="logo">
-    <div class="logo-icon">🕶️</div>
-    <div>
-      <div class="logo-text">Agent Apex</div>
-      <div class="logo-sub">SuperAgent v6</div>
-    </div>
-  </div>
-  <nav>
-    <div class="nav-item active" onclick="showTab('chat')"><span class="nav-icon">💬</span> Chat <span class="status-dot"></span></div>
-    <div class="nav-item" onclick="showTab('brain')"><span class="nav-icon">🧠</span> Brain</div>
-    <div class="nav-item" onclick="showTab('goals')"><span class="nav-icon">🎯</span> Goals</div>
-    <div class="nav-item" onclick="showTab('plans')"><span class="nav-icon">📋</span> Plans</div>
-    <div class="nav-item" onclick="showTab('files')"><span class="nav-icon">📁</span> Files</div>
-    <div class="nav-item" onclick="showTab('connectors')"><span class="nav-icon">🔌</span> Connectors</div>
-    <div class="nav-item" onclick="showTab('approvals')"><span class="nav-icon">✅</span> Approvals <span id="approval-badge" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:auto"></span></div>
-    <div class="nav-item" onclick="showTab('performance')"><span class="nav-icon">📊</span> Performance</div>
-  </nav>
-  <div class="sidebar-footer">
-    <div class="agent-status" id="agent-status-text">🟢 Idle</div>
-  </div>
-</aside>
-
-<!-- ─── Chat Tab ─── -->
-<div class="tab active" id="tab-chat">
-  <div class="chat-header">
-    <div style="flex:1">
-      <div style="display:flex;align-items:center;gap:8px">
-        <h2>Agent Apex</h2>
-        <span class="loop-badge" id="loop-badge">Loop #0</span>
-        <span class="badge active" id="model-badge">CF Workers AI</span>
+<div id="app">
+  <!-- ── Sidebar ────────────────────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-ring">A</div>
+      <div class="logo-info">
+        <div class="logo-name">Agent Apex</div>
+        <div class="logo-sub">Murry's Workspace</div>
       </div>
-      <div class="sub">Plan → Act → Observe → Reflect</div>
+      <button class="collapse-btn" id="collapse-btn" title="Collapse sidebar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
     </div>
-    <button class="clear-btn" onclick="clearHistory()">Clear history</button>
-  </div>
-  <div class="messages" id="messages"></div>
-  <div class="chat-input-area">
-    <div class="input-row">
-      <textarea class="input-box" id="input-box" placeholder="Ask anything or give me a goal to pursue…" rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-      <button class="send-btn" id="send-btn" onclick="sendMessage()">➤</button>
-    </div>
-  </div>
-</div>
 
-<!-- ─── Brain Tab (Memory) ─── -->
-<div class="tab" id="tab-brain">
-  <div class="panel-header">
-    <h2>🧠 Memory — Long-Term Brain</h2>
-    <div class="desc">D1 structured facts + Vectorize semantic recall. Primed before every planning turn.</div>
-  </div>
-  <div class="panel-body">
-    <div class="card">
-      <div class="card-title">➕ Store New Memory</div>
-      <div class="form-row">
-        <input class="form-input" id="mem-key" placeholder="key (snake_case)" />
-        <input class="form-input" id="mem-val" placeholder="value" style="flex:2" />
-        <select class="form-select" id="mem-type">
-          <option>fact</option><option>preference</option><option>goal</option><option>profile</option><option>project</option>
-        </select>
-        <button class="form-btn" onclick="addMemory()">Store</button>
+    <nav class="nav">
+      <div class="nav-item active" data-tab="chat">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span class="nav-label">Chat</span>
       </div>
-    </div>
-    <div class="card">
-      <div class="card-title">📦 Stored Memories</div>
-      <div id="memory-list" style="display:flex;flex-direction:column;gap:6px"></div>
-    </div>
-  </div>
-</div>
+      <div class="nav-item" data-tab="brain">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>
+        <span class="nav-label">Brain</span>
+      </div>
+      <div class="nav-item" data-tab="goals">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        <span class="nav-label">Goals</span>
+      </div>
+      <div class="nav-item" data-tab="plans">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span class="nav-label">Plans</span>
+      </div>
+      <div class="nav-item" data-tab="files">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span class="nav-label">Files</span>
+      </div>
+      <div class="nav-section">System</div>
+      <div class="nav-item" data-tab="settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span class="nav-label">Settings</span>
+      </div>
+    </nav>
 
-<!-- ─── Goals Tab ─── -->
-<div class="tab" id="tab-goals">
-  <div class="panel-header">
-    <h2>🎯 Goals — Persistent Objectives</h2>
-    <div class="desc">Goals persist across all turns and sessions. Every action traces to a declared goal.</div>
-  </div>
-  <div class="panel-body">
-    <div class="card">
-      <div class="card-title">➕ New Goal</div>
-      <div class="form-row">
-        <input class="form-input" id="goal-desc" placeholder="Describe the goal…" style="flex:3" />
-        <select class="form-select" id="goal-priority">
-          <option value="10">P10 — Critical</option>
-          <option value="8">P8 — High</option>
-          <option value="5" selected>P5 — Medium</option>
-          <option value="3">P3 — Low</option>
-          <option value="1">P1 — Backlog</option>
-        </select>
-        <button class="form-btn" onclick="addGoal()">Add Goal</button>
+    <div class="sidebar-footer">
+      <div class="user-avatar">L</div>
+      <span class="user-name">Lawrence</span>
+    </div>
+  </aside>
+
+  <!-- ── Main ──────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- ── CHAT TAB ───────────────────────────────────────────────────── -->
+    <div class="tab active" id="tab-chat">
+      <div class="top-bar">
+        <span class="top-title">Agent Apex</span>
+        <span class="badge badge-green" id="status-badge">
+          <span style="font-size:8px">●</span> Online
+        </span>
+        <div class="top-spacer"></div>
+        <button class="btn" id="clear-chat-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Clear
+        </button>
+      </div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-input-wrap">
+        <div class="input-row">
+          <textarea id="chat-input" placeholder="Message Agent Apex…" rows="1"></textarea>
+          <button id="send-btn" disabled>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+        <div class="suggestions-row" id="suggestions-row">
+          <div class="suggestion-chip" onclick="sendSuggestion(this)">What are my active goals?</div>
+          <div class="suggestion-chip" onclick="sendSuggestion(this)">Clark County RFP status</div>
+          <div class="suggestion-chip" onclick="sendSuggestion(this)">Draft a LinkedIn post about proposal management</div>
+          <div class="suggestion-chip" onclick="sendSuggestion(this)">BouncieHouse payout status</div>
+        </div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-title">🎯 Active Goals</div>
-      <div id="goals-list" style="display:flex;flex-direction:column;gap:8px"></div>
+
+    <!-- ── BRAIN TAB ──────────────────────────────────────────────────── -->
+    <div class="tab" id="tab-brain">
+      <div class="top-bar">
+        <span class="top-title">Brain</span>
+        <span class="badge badge-grey" id="mem-count">— memories</span>
+        <div class="top-spacer"></div>
+        <button class="btn" onclick="loadMemory()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+      <div class="panel-body">
+        <div class="search-row" style="margin-bottom:4px">
+          <input class="field" id="mem-search" style="max-width:320px" placeholder="Search memory…" oninput="filterMemory()" />
+          <div id="mem-filters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
+        <div id="mem-list"><div class="empty"><div class="empty-icon">🧠</div>Loading memories…</div></div>
+      </div>
     </div>
-  </div>
+
+    <!-- ── GOALS TAB ──────────────────────────────────────────────────── -->
+    <div class="tab" id="tab-goals">
+      <div class="top-bar">
+        <span class="top-title">Goals</span>
+        <span class="badge badge-grey" id="goals-count">—</span>
+        <div class="top-spacer"></div>
+        <button class="btn" onclick="loadGoals()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+      <div class="panel-body">
+        <div id="goals-list"><div class="empty"><div class="empty-icon">🎯</div>Loading goals…</div></div>
+      </div>
+    </div>
+
+    <!-- ── PLANS TAB ──────────────────────────────────────────────────── -->
+    <div class="tab" id="tab-plans">
+      <div class="top-bar">
+        <span class="top-title">Plans</span>
+        <span class="badge badge-grey" id="plans-count">—</span>
+        <div class="top-spacer"></div>
+        <button class="btn" onclick="loadPlans()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+      <div class="panel-body">
+        <div id="plans-list"><div class="empty"><div class="empty-icon">📋</div>Loading plans…</div></div>
+      </div>
+    </div>
+
+    <!-- ── FILES TAB ──────────────────────────────────────────────────── -->
+    <div class="tab" id="tab-files">
+      <div class="top-bar">
+        <span class="top-title">Files</span>
+        <span class="badge badge-grey" id="files-count">—</span>
+        <div class="top-spacer"></div>
+        <input type="file" id="file-input" style="display:none" onchange="uploadFile(this)" />
+        <button class="btn btn-dark" onclick="document.getElementById('file-input').click()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Upload
+        </button>
+      </div>
+      <div class="panel-body">
+        <div id="files-list"><div class="empty"><div class="empty-icon">📁</div>Loading files…</div></div>
+      </div>
+    </div>
+
+    <!-- ── SETTINGS TAB ───────────────────────────────────────────────── -->
+    <div class="tab" id="tab-settings">
+      <div class="top-bar">
+        <span class="top-title">Settings</span>
+        <div class="top-spacer"></div>
+        <span id="save-badge" class="badge badge-green" style="display:none">✓ Saved</span>
+      </div>
+      <div class="panel-body">
+        <div class="card">
+          <div class="settings-title">Identity</div>
+          <div class="field-group">
+            <div class="field-label">Agent Name</div>
+            <input class="field" id="s-agent-name" placeholder="Agent Apex" />
+          </div>
+          <div class="field-group">
+            <div class="field-label">User Name</div>
+            <input class="field" id="s-user-name" placeholder="Lawrence" />
+          </div>
+          <div class="field-group">
+            <div class="field-label">Description</div>
+            <input class="field" id="s-description" placeholder="Personal AI Chief of Staff…" />
+          </div>
+        </div>
+        <div class="card">
+          <div class="settings-title">Soul / System Prompt</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Override the agent's core persona. Leave blank to use the default Agent Apex soul.</div>
+          <textarea class="field" id="s-soul" style="height:180px;font-family:'SF Mono','Fira Code',monospace;font-size:12px" placeholder="You are Agent Apex…"></textarea>
+        </div>
+        <div class="card">
+          <div class="settings-title">Backend</div>
+          <div style="font-size:13px;color:var(--text2);display:flex;flex-direction:column;gap:8px">
+            <div>⚡ Worker URL: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px" id="worker-url-display">loading…</code></div>
+            <div>🔄 Cloudflare Workers · D1 · Vectorize · R2</div>
+            <div>🤖 AI: Cloudflare Workers AI + Anthropic fallback</div>
+          </div>
+        </div>
+        <button class="btn btn-dark" style="padding:10px 20px;font-size:13px" onclick="saveIdentity()">Save Identity</button>
+      </div>
+    </div>
+
+  </main>
 </div>
 
-<!-- ─── Plans Tab ─── -->
-<div class="tab" id="tab-plans">
-  <div class="panel-header">
-    <h2>📋 Plans — Structured Reasoning Audit</h2>
-    <div class="desc">Every multi-step task generates an explicit JSON plan. All steps are logged and auditable.</div>
-  </div>
-  <div class="sub-tabs">
-    <div class="sub-tab active" onclick="showSubTab('plans','recent-plans')">Recent Plans</div>
-    <div class="sub-tab" onclick="showSubTab('plans','tool-log')">Tool Log</div>
-  </div>
-  <div class="panel-body scroll-y" style="padding-top:16px">
-    <div class="sub-panel active" id="sub-recent-plans">
-      <div id="plans-list" style="display:flex;flex-direction:column;gap:10px"></div>
-    </div>
-    <div class="sub-panel" id="sub-tool-log">
-      <div id="tool-log-list" style="display:flex;flex-direction:column;gap:6px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ─── Files Tab ─── -->
-<div class="tab" id="tab-files">
-  <div class="panel-header">
-    <h2>📁 Files — R2 Storage + Knowledge Base</h2>
-    <div class="desc">Upload files to R2. Index them to Vectorize for semantic search in the knowledge base.</div>
-  </div>
-  <div class="panel-body">
-    <div class="drop-zone card" id="drop-zone" onclick="document.getElementById('file-input').click()">
-      <div id="drop-text">🗂️ Drag & drop files here, or click to upload<br><span style="font-size:11px">PDF, TXT, CSV, JSON, DOCX, MD</span></div>
-      <input type="file" id="file-input" style="display:none" multiple onchange="handleFileSelect(event)" />
-    </div>
-    <div class="card">
-      <div class="card-title">📦 Files in R2</div>
-      <div id="files-list" style="display:flex;flex-direction:column;gap:8px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ─── Connectors Tab ─── -->
-<div class="tab" id="tab-connectors">
-  <div class="panel-header">
-    <h2>🔌 Connectors — OAuth Integrations</h2>
-    <div class="desc">Connect Google (Gmail + Calendar), GitHub, LinkedIn. Approval-required tools never fire without your OK.</div>
-  </div>
-  <div class="panel-body">
-    <div id="connectors-list" style="display:flex;flex-direction:column;gap:10px"></div>
-  </div>
-</div>
-
-<!-- ─── Approvals Tab ─── -->
-<div class="tab" id="tab-approvals">
-  <div class="panel-header">
-    <h2>✅ Approvals — Human-in-the-Loop</h2>
-    <div class="desc">Emails, LinkedIn posts, and external API calls require your explicit approval before execution.</div>
-  </div>
-  <div class="panel-body">
-    <div id="approvals-list" style="display:flex;flex-direction:column;gap:10px"></div>
-  </div>
-</div>
-
-<!-- ─── Performance Tab ─── -->
-<div class="tab" id="tab-performance">
-  <div class="panel-header">
-    <h2>📊 Performance — Self-Improvement</h2>
-    <div class="desc">Agent monitors its own performance and proposes improvements. No silent failures.</div>
-  </div>
-  <div class="panel-body">
-    <div class="stat-grid" id="perf-stats">
-      <div class="stat"><div class="stat-val" id="p-total">—</div><div class="stat-lbl">Total Plans</div></div>
-      <div class="stat"><div class="stat-val" id="p-done">—</div><div class="stat-lbl">Completed</div></div>
-      <div class="stat"><div class="stat-val" id="p-fail">—</div><div class="stat-lbl">Failed</div></div>
-      <div class="stat"><div class="stat-val" id="p-rate">—</div><div class="stat-lbl">Success Rate</div></div>
-    </div>
-    <div class="card">
-      <div class="card-title">🛠️ Tool Usage</div>
-      <div id="tool-usage-chart" style="display:flex;flex-direction:column;gap:6px"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">🔍 Memory Audit</div>
-      <div id="memory-audit"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">⚡ Recent Events</div>
-      <div id="event-log" style="display:flex;flex-direction:column;gap:6px"></div>
-    </div>
-  </div>
-</div>
+<!-- ── Toast ─────────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
 
 <script>
-// ─── State ───────────────────────────────────────────────────────────────────
-let messages = [];
-let isStreaming = false;
-let loopCount = 0;
+// ── Config ──────────────────────────────────────────────────────────────────
+const WORKER_URL = window.location.origin;  // same origin — worker serves this HTML
 
-// ─── Tab navigation ───────────────────────────────────────────────────────────
-function showTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n => {
-    if (n.textContent.toLowerCase().includes(name.replace(/-/g,' '))) n.classList.add('active');
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const $ = (sel, ctx = document) => ctx.querySelector(sel);
+const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
+const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const timeAgo = (ts) => {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  return `${Math.floor(s/86400)}d ago`;
+};
+const fmtTime = (ts) => new Date(ts).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+const fmtBytes = (b) => {
+  if (!b) return '—';
+  if (b < 1024) return `${b}B`;
+  if (b < 1024**2) return `${(b/1024).toFixed(1)}KB`;
+  return `${(b/1024**2).toFixed(1)}MB`;
+};
+function toast(msg, duration = 2500) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
+
+// Markdown-lite renderer
+function renderMd(text) {
+  if (!text) return '';
+  let html = esc(text);
+  // Code blocks
+  html = html.replace(/```([^`]*?)```/gs, (_, c) => `<pre><code>${c.trim()}</code></pre>`);
+  // Inline code
+  html = html.replace(/`([^`]+?)`/g, (_, c) => `<code>${c}</code>`);
+  // Bold
+  html = html.replace(/\*\*(.+?)\*\*/g, (_, t) => `<strong>${t}</strong>`);
+  // Newlines
+  html = html.replace(/\n/g, '<br/>');
+  return html;
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+$$('.nav-item').forEach(el => {
+  el.addEventListener('click', () => {
+    const tab = el.dataset.tab;
+    $$('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    $$('.tab').forEach(t => t.classList.remove('active'));
+    $(`#tab-${tab}`).classList.add('active');
+    if (tab === 'brain')    loadMemory();
+    if (tab === 'goals')    loadGoals();
+    if (tab === 'plans')    loadPlans();
+    if (tab === 'files')    loadFiles();
+    if (tab === 'settings') loadIdentity();
   });
-  if (name === 'brain') loadMemory();
-  if (name === 'goals') loadGoals();
-  if (name === 'plans') { loadPlans(); loadToolLog(); }
-  if (name === 'files') loadFiles();
-  if (name === 'connectors') loadConnectors();
-  if (name === 'approvals') loadApprovals();
-  if (name === 'performance') loadPerformance();
-}
+});
 
-function showSubTab(parent, name) {
-  document.querySelectorAll(`#tab-${parent} .sub-panel`).forEach(p => p.classList.remove('active'));
-  document.querySelectorAll(`#tab-${parent} .sub-tab`).forEach(t => t.classList.remove('active'));
-  document.getElementById('sub-' + name).classList.add('active');
-  event.target.classList.add('active');
-}
+// Collapse sidebar
+let sidebarCollapsed = false;
+$('#collapse-btn').addEventListener('click', () => {
+  sidebarCollapsed = !sidebarCollapsed;
+  $('#sidebar').classList.toggle('collapsed', sidebarCollapsed);
+});
 
-// ─── Chat ─────────────────────────────────────────────────────────────────────
-function autoResize(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-}
+// ── Chat ──────────────────────────────────────────────────────────────────────
+let messages = [];
+let isLoading = false;
 
-function handleKey(e) {
+const chatMessages = $('#chat-messages');
+const chatInput   = $('#chat-input');
+const sendBtn     = $('#send-btn');
+
+chatInput.addEventListener('input', () => {
+  sendBtn.disabled = !chatInput.value.trim() || isLoading;
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+});
+chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+sendBtn.addEventListener('click', sendMessage);
+
+$('#clear-chat-btn').addEventListener('click', async () => {
+  await fetch(`${WORKER_URL}/api/history`, { method: 'DELETE' });
+  messages = [];
+  chatMessages.innerHTML = '';
+  addMessage('assistant', "Chat cleared. What's next, Lawrence?");
+  $('#suggestions-row').style.display = 'flex';
+});
+
+function sendSuggestion(el) {
+  chatInput.value = el.textContent;
+  sendBtn.disabled = false;
+  sendMessage();
 }
 
-function renderMarkdown(text) {
-  return text
-    .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    .replace(/\n/g, '<br>');
+function addMessage(role, content, ts = Date.now()) {
+  const msg = { role, content, ts };
+  messages.push(msg);
+  renderMessage(msg);
+  scrollBottom();
+  if (messages.length > 1) $('#suggestions-row').style.display = 'none';
+  return msg;
 }
 
-function appendMessage(role, content, isStreaming=false) {
-  const msgDiv = document.getElementById('messages');
-  const id = 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-  const isUser = role === 'user';
-  const html = `
-    <div class="message ${role}" id="${id}">
-      <div class="avatar ${isUser ? 'user' : 'agent'}">${isUser ? '👤' : '🕶️'}</div>
-      <div class="bubble" id="bubble-${id}">${isUser ? content.replace(/</g,'&lt;') : renderMarkdown(content)}</div>
-    </div>`;
-  msgDiv.insertAdjacentHTML('beforeend', html);
-  msgDiv.scrollTop = msgDiv.scrollHeight;
-  return id;
-}
-
-function updateBubble(id, content) {
-  const el = document.getElementById('bubble-' + id);
-  if (el) { el.innerHTML = renderMarkdown(content); }
-  document.getElementById('messages').scrollTop = 999999;
-}
-
-function showThinking() {
-  const msgDiv = document.getElementById('messages');
-  const id = 'thinking-' + Date.now();
-  msgDiv.insertAdjacentHTML('beforeend', `
-    <div class="message assistant" id="${id}">
-      <div class="avatar agent">🕶️</div>
-      <div class="bubble thinking">
-        <span>Perceiving → Planning</span>
-        <span class="dots"><span>.</span><span>.</span><span>.</span></span>
+function renderMessage(msg) {
+  const isUser = msg.role === 'user';
+  const div = document.createElement('div');
+  div.className = `msg-row ${isUser ? 'user' : ''}`;
+  div.dataset.id = msg.ts;
+  div.innerHTML = `
+    <div class="msg-avatar ${isUser ? 'user' : 'agent'}">${isUser ? 'L' : 'A'}</div>
+    <div class="msg-body">
+      <div class="bubble ${isUser ? 'user' : 'agent'} msg-content">${renderMd(msg.content)}</div>
+      <div class="msg-meta ${isUser ? 'user' : ''}">
+        ${!isUser ? '<span style="font-weight:600;color:var(--text2)">Agent Apex</span>' : ''}
+        <span>${fmtTime(msg.ts)}</span>
+        ${!isUser ? `<button class="copy-btn" onclick="copyMsg(this)" data-text="${esc(msg.content)}">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy
+        </button>` : ''}
       </div>
-    </div>`);
-  msgDiv.scrollTop = 999999;
-  return id;
+    </div>`;
+  chatMessages.appendChild(div);
 }
 
-function showToolCall(msgDiv, toolName) {
-  msgDiv.insertAdjacentHTML('beforeend', `
-    <div class="message assistant" style="max-width:80%">
-      <div class="avatar agent">🕶️</div>
-      <div class="tool-call">⚙️ <strong>${toolName}</strong> — executing…</div>
-    </div>`);
-  msgDiv.scrollTop = 999999;
+function updateStreamingMessage(ts, text) {
+  const row = chatMessages.querySelector(`[data-id="${ts}"]`);
+  if (row) {
+    const content = row.querySelector('.msg-content');
+    if (content) content.innerHTML = renderMd(text);
+  }
+  scrollBottom();
+}
+
+function scrollBottom() {
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function copyMsg(btn) {
+  navigator.clipboard?.writeText(btn.dataset.text);
+  btn.textContent = '✓ Copied';
+  setTimeout(() => {
+    btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy`;
+  }, 2000);
+}
+
+// Typing indicator
+let typingEl = null;
+function showTyping() {
+  if (typingEl) return;
+  typingEl = document.createElement('div');
+  typingEl.className = 'msg-row';
+  typingEl.innerHTML = `
+    <div class="msg-avatar agent">A</div>
+    <div class="msg-body">
+      <div class="bubble agent">
+        <div class="typing-wrap">
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+        </div>
+      </div>
+    </div>`;
+  chatMessages.appendChild(typingEl);
+  scrollBottom();
+}
+function hideTyping() {
+  if (typingEl) { typingEl.remove(); typingEl = null; }
 }
 
 async function sendMessage() {
-  const input = document.getElementById('input-box');
-  const text = input.value.trim();
-  if (!text || isStreaming) return;
+  const text = chatInput.value.trim();
+  if (!text || isLoading) return;
+  chatInput.value = '';
+  chatInput.style.height = 'auto';
+  sendBtn.disabled = true;
+  isLoading = true;
 
-  input.value = ''; input.style.height = 'auto';
-  isStreaming = true;
-  document.getElementById('send-btn').disabled = true;
-  document.getElementById('agent-status-text').textContent = '🔵 Perceiving…';
+  addMessage('user', text);
+  showTyping();
 
-  messages.push({ role: 'user', content: text });
-  appendMessage('user', text);
-  loopCount++;
-  document.getElementById('loop-badge').textContent = `Loop #${loopCount}`;
-
-  const thinkId = showThinking();
+  const payload = messages.map(m => ({ role: m.role, content: m.content }));
+  let full = '';
+  const streamTs = Date.now();
+  let streamStarted = false;
 
   try {
-    const res = await fetch('/api/chat', {
+    const res = await fetch(`${WORKER_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, stream: true }),
+      body: JSON.stringify({ messages: payload, stream: true }),
     });
 
-    document.getElementById(thinkId)?.remove();
-
-    if (!res.ok || !res.body) {
-      appendMessage('assistant', '⚠️ Error: ' + res.statusText);
-      isStreaming = false; document.getElementById('send-btn').disabled = false;
-      document.getElementById('agent-status-text').textContent = '🔴 Error';
-      return;
-    }
-
-    const msgId = appendMessage('assistant', '');
-    let fullText = '';
-    let toolCallsShown = new Set();
-    document.getElementById('agent-status-text').textContent = '🟡 Planning & Acting…';
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const reader = res.body.getReader();
     const dec = new TextDecoder();
@@ -522,415 +855,285 @@ async function sendMessage() {
         const t = line.trim();
         if (!t.startsWith('data: ')) continue;
         const raw = t.slice(6);
-        if (raw === '[DONE]') continue;
+        if (raw === '[DONE]') break;
         try {
           const ev = JSON.parse(raw);
-          // Tool call notification
-          if (ev.type === 'tool_call' && ev.toolName && !toolCallsShown.has(ev.toolName + ev.toolCallId)) {
-            toolCallsShown.add(ev.toolName + ev.toolCallId);
-            const mdiv = document.getElementById('messages');
-            mdiv.insertAdjacentHTML('beforeend', `
-              <div class="message assistant" style="opacity:0.7">
-                <div class="avatar agent" style="font-size:10px">⚙️</div>
-                <div class="tool-call">🔧 <strong>${ev.toolName}</strong></div>
-              </div>`);
-            mdiv.scrollTop = 999999;
+          const chunk = ev?.delta?.text ?? ev?.choices?.[0]?.delta?.content ?? '';
+          if (chunk) {
+            if (!streamStarted) {
+              hideTyping();
+              const streamMsg = { role: 'assistant', content: '', ts: streamTs };
+              messages.push(streamMsg);
+              renderMessage(streamMsg);
+              streamStarted = true;
+            }
+            full += chunk;
+            updateStreamingMessage(streamTs, full);
           }
-          // Text delta
-          const text = ev?.response ?? ev?.choices?.[0]?.delta?.content
-                    ?? ev?.delta?.text ?? ev?.delta?.type === 'text_delta' ? ev?.delta?.text : '';
-          if (text) { fullText += text; updateBubble(msgId, fullText); }
-          if (ev.type === 'message_stop') break;
         } catch {}
       }
     }
-
-    if (fullText) messages.push({ role: 'assistant', content: fullText });
-
-    // Persist to history
-    fetch('/api/history', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: messages.slice(-20) }),
-    }).catch(() => {});
-
   } catch (e) {
-    document.getElementById(thinkId)?.remove();
-    appendMessage('assistant', '⚠️ Connection error: ' + e.message);
+    hideTyping();
+    full = `⚠️ Connection error: ${e.message}`;
+    if (!streamStarted) {
+      const m = { role: 'assistant', content: full, ts: streamTs };
+      messages.push(m);
+      renderMessage(m);
+    } else {
+      updateStreamingMessage(streamTs, full);
+    }
   }
 
-  isStreaming = false;
-  document.getElementById('send-btn').disabled = false;
-  document.getElementById('agent-status-text').textContent = '🟢 Idle';
+  // Update final message content in array
+  const idx = messages.findLastIndex(m => m.ts === streamTs);
+  if (idx >= 0) messages[idx].content = full;
+
+  hideTyping();
+  isLoading = false;
+  sendBtn.disabled = !chatInput.value.trim();
+  scrollBottom();
 }
 
-async function clearHistory() {
-  if (!confirm('Clear all conversation history?')) return;
-  await fetch('/api/history', { method: 'DELETE' });
-  messages = [];
-  document.getElementById('messages').innerHTML = '';
-  loopCount = 0;
-  document.getElementById('loop-badge').textContent = 'Loop #0';
-}
-
-// Load history on start
-async function loadHistory() {
+// Load chat history on boot
+async function initChat() {
   try {
-    const r = await fetch('/api/history');
-    const d = await r.json();
-    if (d.messages?.length) {
-      messages = d.messages.map(m => ({ role: m.role, content: m.content }));
-      messages.forEach(m => {
-        if (m.role === 'user' || m.role === 'assistant') appendMessage(m.role, m.content);
-      });
+    const res = await fetch(`${WORKER_URL}/api/history`);
+    const data = await res.json();
+    const hist = data.messages ?? [];
+    if (hist.length) {
+      hist.forEach(m => addMessage(m.role, m.content, m.ts));
+    } else {
+      addMessage('assistant', `Hey Lawrence 👋 I'm **Agent Apex** — your personal AI Chief of Staff.\n\nI have full context on your projects, proposals, BouncieHouse, Murry Consultancy, and career goals.\n\nWhat do you need handled today?`);
     }
-  } catch {}
+  } catch {
+    addMessage('assistant', "Hey Lawrence — I'm Agent Apex. What's on the agenda?");
+  }
 }
 
-// ─── Memory ───────────────────────────────────────────────────────────────────
+// ── Brain (Memory) ────────────────────────────────────────────────────────────
+let allMemories = [];
+let memTypeFilter = 'all';
+
 async function loadMemory() {
+  $('#mem-list').innerHTML = '<div class="empty"><div class="empty-icon">🧠</div>Loading…</div>';
   try {
-    const r = await fetch('/api/memory');
-    const d = await r.json();
-    const el = document.getElementById('memory-list');
-    if (!d.memories?.length) { el.innerHTML = '<div class="empty">No memories stored yet.</div>'; return; }
-    el.innerHTML = d.memories.map(m => `
-      <div class="memory-item">
-        <div class="mem-key">${m.key}</div>
-        <div class="mem-val">${String(m.val).slice(0, 200)}${m.val?.length > 200 ? '…' : ''}</div>
-        <div class="mem-type">${m.type}</div>
-        <button class="mem-del" onclick="deleteMemory('${m.key}')">✕</button>
-      </div>`).join('');
-  } catch { document.getElementById('memory-list').innerHTML = '<div class="empty">Failed to load.</div>'; }
+    const res = await fetch(`${WORKER_URL}/api/memory`);
+    const data = await res.json();
+    allMemories = data.memories ?? [];
+  } catch { allMemories = []; }
+  const types = ['all', ...new Set(allMemories.map(m => m.type).filter(Boolean))];
+  $('#mem-filters').innerHTML = types.map(t =>
+    `<div class="filter-chip ${t === memTypeFilter ? 'active' : ''}" onclick="setMemFilter('${t}')">${t}</div>`
+  ).join('');
+  $('#mem-count').textContent = `${allMemories.length} memories`;
+  renderMemory();
 }
 
-async function addMemory() {
-  const key = document.getElementById('mem-key').value.trim();
-  const val = document.getElementById('mem-val').value.trim();
-  const type = document.getElementById('mem-type').value;
-  if (!key || !val) return;
-  await fetch('/api/memory', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ key, value: val, type }) });
-  document.getElementById('mem-key').value = '';
-  document.getElementById('mem-val').value = '';
-  loadMemory();
+function setMemFilter(t) {
+  memTypeFilter = t;
+  $$('#mem-filters .filter-chip').forEach(c => c.classList.toggle('active', c.textContent === t));
+  renderMemory();
+}
+
+function filterMemory() { renderMemory(); }
+
+function renderMemory() {
+  const q = ($('#mem-search')?.value || '').toLowerCase();
+  const filtered = allMemories.filter(m => {
+    const matchType = memTypeFilter === 'all' || m.type === memTypeFilter;
+    const matchQ = !q || m.key.toLowerCase().includes(q) || (m.val||'').toLowerCase().includes(q);
+    return matchType && matchQ;
+  });
+  if (!filtered.length) {
+    $('#mem-list').innerHTML = '<div class="empty"><div class="empty-icon">🧠</div>No memories found</div>';
+    return;
+  }
+  $('#mem-list').innerHTML = filtered.map(m => `
+    <div class="mem-item">
+      <div class="mem-row1">
+        <span class="tag tag-${m.type || 'fact'}">${m.type || 'fact'}</span>
+        <span class="mem-key">${esc(m.key)}</span>
+        <div style="flex:1"></div>
+        <span style="font-size:11px;color:var(--muted)">${timeAgo(m.ts)}</span>
+        <button class="btn btn-danger btn-sm" onclick="deleteMemory('${esc(m.key)}')">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+        </button>
+      </div>
+      <div class="mem-val">${esc((m.val||'').slice(0, 320))}${(m.val||'').length > 320 ? '…' : ''}</div>
+      <div class="mem-footer">
+        <span>Accessed ${m.freq}×</span>
+        <span>·</span>
+        <span>Last: ${timeAgo(m.last_access)}</span>
+      </div>
+    </div>`).join('');
 }
 
 async function deleteMemory(key) {
-  await fetch('/api/memory/' + encodeURIComponent(key), { method: 'DELETE' });
-  loadMemory();
+  await fetch(`${WORKER_URL}/api/memory/${encodeURIComponent(key)}`, { method: 'DELETE' });
+  allMemories = allMemories.filter(m => m.key !== key);
+  $('#mem-count').textContent = `${allMemories.length} memories`;
+  renderMemory();
+  toast('Memory deleted');
 }
 
-// ─── Goals ────────────────────────────────────────────────────────────────────
+// ── Goals ─────────────────────────────────────────────────────────────────────
 async function loadGoals() {
+  $('#goals-list').innerHTML = '<div class="empty"><div class="empty-icon">🎯</div>Loading…</div>';
   try {
-    const r = await fetch('/api/goals');
-    const d = await r.json();
-    const el = document.getElementById('goals-list');
-    if (!d.goals?.length) { el.innerHTML = '<div class="empty">No goals. Add one above or ask the agent to create goals.</div>'; return; }
-    el.innerHTML = d.goals.map(g => `
+    const res = await fetch(`${WORKER_URL}/api/goals`);
+    const data = await res.json();
+    const goals = (data.goals ?? []).sort((a,b) => (a.priority||5)-(b.priority||5));
+    const active = goals.filter(g => g.status === 'active').length;
+    $('#goals-count').textContent = `${active} active`;
+    if (!goals.length) {
+      $('#goals-list').innerHTML = '<div class="empty"><div class="empty-icon">🎯</div>No goals yet. Tell Agent Apex a goal in the chat.</div>';
+      return;
+    }
+    const PRIORITY = {1:'P1 Critical',2:'P2 High',3:'P3 High',4:'P4 Medium',5:'P5 Medium',6:'P6',7:'P7',8:'P8',9:'P9',10:'P10 Low'};
+    $('#goals-list').innerHTML = goals.map(g => `
       <div class="goal-item">
-        <div class="goal-p" style="background:${priorityColor(g.priority)}">${g.priority}</div>
-        <div style="flex:1">
-          <div class="goal-desc">${g.description}</div>
-          <div class="goal-status">${g.status} · ${timeAgo(g.created)}</div>
-          ${g.progress ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">${g.progress}</div>` : ''}
+        <div class="goal-row1">
+          <span class="tag tag-${g.status || 'active'}">${g.status || 'active'}</span>
+          <span class="tag" style="background:var(--bg)">${PRIORITY[g.priority] || `P${g.priority}`}</span>
+          <div style="flex:1"></div>
+          <span style="font-size:11px;color:var(--muted)">${timeAgo(g.created)}</span>
         </div>
-        <div class="goal-actions">
-          ${g.status === 'active' ? `<button class="btn-sm" onclick="updateGoal('${g.id}','completed')">✓ Done</button>` : ''}
-          <button class="btn-sm danger" onclick="deleteGoal('${g.id}')">✕</button>
-        </div>
+        <div class="goal-desc">${esc(g.description)}</div>
+        ${g.progress ? `<div class="goal-progress" style="margin-top:8px">${esc(g.progress)}</div>` : ''}
       </div>`).join('');
-  } catch {}
-}
-
-function priorityColor(p) {
-  if (p >= 9) return '#ef4444'; if (p >= 7) return '#f97316'; if (p >= 5) return '#7c3aed'; return '#52525b';
-}
-
-async function addGoal() {
-  const desc = document.getElementById('goal-desc').value.trim();
-  const pri = parseInt(document.getElementById('goal-priority').value);
-  if (!desc) return;
-  await fetch('/api/goals', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ description: desc, priority: pri }) });
-  document.getElementById('goal-desc').value = '';
-  loadGoals();
-}
-
-async function updateGoal(id, status) {
-  await fetch('/api/goals/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status }) });
-  loadGoals();
-}
-
-async function deleteGoal(id) {
-  await fetch('/api/goals/' + id, { method: 'DELETE' });
-  loadGoals();
-}
-
-// ─── Plans ────────────────────────────────────────────────────────────────────
-async function loadPlans() {
-  try {
-    const r = await fetch('/api/plans');
-    const d = await r.json();
-    const el = document.getElementById('plans-list');
-    if (!d.plans?.length) { el.innerHTML = '<div class="empty">No plans yet. Multi-step tasks generate explicit JSON plans.</div>'; return; }
-    el.innerHTML = d.plans.map(p => {
-      let steps = [];
-      try { steps = JSON.parse(p.steps || '[]'); } catch {}
-      const statusIcon = { completed:'✅', failed:'❌', running:'⏳', pending:'🔵' }[p.status] || '◯';
-      return `<div class="plan-item ${p.status}">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span>${statusIcon}</span>
-          <div class="plan-goal">${p.goal}</div>
-          <span class="badge ${p.status}">${p.status}</span>
-        </div>
-        <div class="plan-meta">
-          <span>${steps.length} steps</span>
-          <span>Step ${p.current_step}/${steps.length}</span>
-          <span>${timeAgo(p.created)}</span>
-        </div>
-        ${steps.length ? `<div class="plan-steps">${steps.map((s,i) => `
-          <div class="plan-step">
-            <span class="step-status">${stepIcon(s.status)}</span>
-            <span style="color:var(--accent2);font-weight:600">${s.tool}</span>
-            ${s.rationale ? `<span style="color:var(--muted)">— ${s.rationale.slice(0,80)}</span>` : ''}
-          </div>`).join('')}</div>` : ''}
-        ${p.reflection ? `<div class="reflection">💭 ${p.reflection}</div>` : ''}
-      </div>`;
-    }).join('');
-  } catch {}
-}
-
-function stepIcon(s) {
-  return { success:'✅', error:'❌', skipped:'⏭️', running:'⏳', pending:'○' }[s] || '○';
-}
-
-async function loadToolLog() {
-  try {
-    const r = await fetch('/api/tool-log?limit=50');
-    const d = await r.json();
-    const el = document.getElementById('tool-log-list');
-    if (!d.logs?.length) { el.innerHTML = '<div class="empty">No tool calls logged yet.</div>'; return; }
-    el.innerHTML = d.logs.map(l => `
-      <div class="log-item">
-        <div class="log-status ${l.status}"></div>
-        <div class="log-tool">${l.tool_name}</div>
-        ${l.error ? `<span style="color:var(--red);font-size:10px">${l.error.slice(0,60)}</span>` : ''}
-        <div class="log-dur">${l.duration_ms}ms</div>
-        <div class="log-ts">${timeAgo(l.ts)}</div>
-      </div>`).join('');
-  } catch {}
-}
-
-// ─── Files ────────────────────────────────────────────────────────────────────
-const dz = null;
-function initDropZone() {
-  const zone = document.getElementById('drop-zone');
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); uploadFiles(e.dataTransfer.files); });
-}
-
-function handleFileSelect(e) { uploadFiles(e.target.files); }
-
-async function uploadFiles(files) {
-  for (const file of files) {
-    const key = 'uploads/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
-    document.getElementById('drop-text').textContent = `Uploading ${file.name}…`;
-    try {
-      const buf = await file.arrayBuffer();
-      await fetch('/api/files/' + key, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: buf });
-    } catch(e) { alert('Upload failed: ' + e.message); }
+  } catch {
+    $('#goals-list').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Could not load goals</div>';
   }
-  document.getElementById('drop-text').innerHTML = '🗂️ Drag & drop files here, or click to upload<br><span style="font-size:11px">PDF, TXT, CSV, JSON, DOCX, MD</span>';
-  loadFiles();
 }
 
-async function loadFiles() {
+// ── Plans ─────────────────────────────────────────────────────────────────────
+async function loadPlans() {
+  $('#plans-list').innerHTML = '<div class="empty"><div class="empty-icon">📋</div>Loading…</div>';
   try {
-    const r = await fetch('/api/files');
-    const d = await r.json();
-    const el = document.getElementById('files-list');
-    if (!d.files?.length) { el.innerHTML = '<div class="empty">No files uploaded yet.</div>'; return; }
-    el.innerHTML = d.files.map(f => `
-      <div class="file-item">
-        <div class="file-icon">${fileIcon(f.name)}</div>
-        <div class="file-name">${f.name}</div>
-        <div class="file-size">${fmtSize(f.size)}</div>
-        <div class="file-actions">
-          <button class="btn-sm" onclick="indexFile('${f.key}')">🧠 Index</button>
-          <button class="btn-sm danger" onclick="deleteFile('${f.key}')">✕</button>
+    const res = await fetch(`${WORKER_URL}/api/plans`);
+    const data = await res.json();
+    const plans = data.plans ?? [];
+    $('#plans-count').textContent = `${plans.length} total`;
+    if (!plans.length) {
+      $('#plans-list').innerHTML = '<div class="empty"><div class="empty-icon">📋</div>No plans yet. Give Agent Apex a complex multi-step task.</div>';
+      return;
+    }
+    const STATUS_COLORS = {completed:'#16a34a',failed:'#dc2626',running:'#2563eb',pending:'#d97706',cancelled:'#a1a1aa'};
+    $('#plans-list').innerHTML = plans.map((p, i) => `
+      <div class="plan-item">
+        <div class="plan-header" onclick="togglePlan(${i})">
+          <div class="plan-goal">${esc(p.goal)}</div>
+          <span class="tag tag-${p.status || 'pending'}">${p.status}</span>
+          <span style="font-size:11px;color:var(--muted);margin-left:8px">${timeAgo(p.created)}</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px;flex-shrink:0" id="plan-chevron-${i}"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="plan-body" id="plan-body-${i}" style="display:none">
+          ${(p.steps||[]).map(s => `
+            <div class="step-row">
+              <div class="step-dot" style="background:${STATUS_COLORS[s.status]||'#d4d4d8'}"></div>
+              <div style="flex:1">
+                <span class="step-tool">${esc(s.tool)}</span>
+                ${s.rationale ? `<span class="step-why">— ${esc(s.rationale)}</span>` : ''}
+                ${s.error ? `<div class="step-err">${esc(s.error)}</div>` : ''}
+              </div>
+              <span class="tag tag-${s.status||'pending'}">${s.status||'pending'}</span>
+            </div>`).join('')}
+          ${p.success_criteria ? `<div style="font-size:12px;color:var(--text2);padding:8px 0 0"><strong>Success:</strong> ${esc(p.success_criteria)}</div>` : ''}
+          ${p.reflection ? `<div style="margin-top:8px;padding:8px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text2)">💡 ${esc(p.reflection)}</div>` : ''}
         </div>
       </div>`).join('');
-  } catch {}
+  } catch {
+    $('#plans-list').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Could not load plans</div>';
+  }
 }
 
-function fileIcon(name) {
-  if (/\.pdf$/i.test(name)) return '📄';
-  if (/\.(csv|xlsx?)$/i.test(name)) return '📊';
-  if (/\.(json|js|ts)$/i.test(name)) return '📝';
-  if (/\.(md|txt)$/i.test(name)) return '📃';
-  if (/\.(docx?)$/i.test(name)) return '📝';
-  return '📁';
+function togglePlan(i) {
+  const body = $(`#plan-body-${i}`);
+  const chevron = $(`#plan-chevron-${i}`);
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'flex' : 'none';
+  chevron.style.transform = open ? 'rotate(180deg)' : '';
 }
 
-function fmtSize(b) { if (!b) return '—'; if (b < 1024) return b + 'B'; if (b < 1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB'; }
-
-async function indexFile(key) {
-  const btn = event.target;
-  btn.textContent = 'Indexing…'; btn.disabled = true;
+// ── Files ─────────────────────────────────────────────────────────────────────
+async function loadFiles() {
+  $('#files-list').innerHTML = '<div class="empty"><div class="empty-icon">📁</div>Loading…</div>';
   try {
-    const r = await fetch('/api/index', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ key }) });
-    const d = await r.json();
-    btn.textContent = d.success ? '✅ Indexed' : '❌ Failed';
-    if (!d.success) btn.title = d.error;
-  } catch { btn.textContent = '❌ Error'; }
-  setTimeout(() => { btn.textContent = '🧠 Index'; btn.disabled = false; }, 2000);
-}
-
-async function deleteFile(key) {
-  if (!confirm('Delete ' + key.split('/').pop() + '?')) return;
-  await fetch('/api/files/' + key, { method: 'DELETE' });
-  loadFiles();
-}
-
-// ─── Connectors ───────────────────────────────────────────────────────────────
-const CONNECTOR_META = {
-  google:   { icon: '🔵', name: 'Google', desc: 'Gmail + Google Calendar' },
-  github:   { icon: '⚫', name: 'GitHub', desc: 'Read/write repos, push code' },
-  linkedin: { icon: '🔷', name: 'LinkedIn', desc: 'Draft & queue posts' },
-  anthropic:{ icon: '🟣', name: 'Anthropic Claude', desc: 'AI fallback model' },
-};
-
-async function loadConnectors() {
-  try {
-    const r = await fetch('/api/connectors');
-    const d = await r.json();
-    const el = document.getElementById('connectors-list');
-    el.innerHTML = Object.entries(d).map(([key, v]) => {
-      const meta = CONNECTOR_META[key] || { icon: '🔌', name: key, desc: '' };
-      return `<div class="connector-item">
-        <div class="connector-icon">${meta.icon}</div>
-        <div style="flex:1">
-          <div class="connector-name">${meta.name}</div>
-          <div class="connector-status">${meta.desc}</div>
+    const res = await fetch(`${WORKER_URL}/api/files`);
+    const data = await res.json();
+    const files = data.files ?? [];
+    $('#files-count').textContent = `${files.length} files`;
+    if (!files.length) {
+      $('#files-list').innerHTML = '<div class="empty"><div class="empty-icon">📁</div>No files yet. Upload documents to give Agent Apex context.</div>';
+      return;
+    }
+    const EXT_ICONS = { pdf:'📄', doc:'📝', docx:'📝', txt:'📄', md:'📝', csv:'📊', json:'📦', png:'🖼', jpg:'🖼', jpeg:'🖼', xlsx:'📊' };
+    $('#files-list').innerHTML = files.map(f => {
+      const ext = (f.name || f.key || '').split('.').pop()?.toLowerCase() || '';
+      const icon = EXT_ICONS[ext] || '📄';
+      return `<div class="file-item">
+        <div class="file-icon">${icon}</div>
+        <div style="flex:1;min-width:0">
+          <div class="file-name">${esc(f.name || f.key)}</div>
+          <div class="file-meta">${fmtBytes(f.size)} · ${timeAgo(new Date(f.uploaded||Date.now()).getTime())}</div>
         </div>
-        ${key !== 'anthropic' ? `
-          <button class="conn-btn ${v.connected ? 'connected' : 'disconnected'}" onclick="${v.connected ? `disconnectService('${key}')` : `connectService('${key}')`}">
-            ${v.connected ? '✓ Connected' : 'Connect'}
-          </button>` : `<span class="badge ${v.connected ? 'success' : 'error'}">${v.connected ? 'Active' : 'No key'}</span>`
-        }
+        <a href="${WORKER_URL}/api/files/${encodeURIComponent(f.key)}" target="_blank" rel="noreferrer">
+          <button class="btn btn-sm">View</button>
+        </a>
       </div>`;
     }).join('');
+  } catch {
+    $('#files-list').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Could not load files</div>';
+  }
+}
+
+async function uploadFile(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    await fetch(`${WORKER_URL}/api/files`, { method: 'POST', body: fd });
+    await loadFiles();
+    toast('File uploaded');
+  } catch { toast('Upload failed'); }
+  input.value = '';
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+async function loadIdentity() {
+  try {
+    const res = await fetch(`${WORKER_URL}/api/identity`);
+    const id = await res.json();
+    $('#s-agent-name').value = id.agentName || 'Agent Apex';
+    $('#s-user-name').value  = id.userName  || 'Lawrence';
+    $('#s-description').value = id.description || '';
+    $('#s-soul').value        = id.soul || '';
+    $('#worker-url-display').textContent = WORKER_URL;
   } catch {}
 }
 
-async function connectService(svc) { window.open('/api/connectors/' + svc + '/auth', '_blank', 'width=600,height=700'); setTimeout(loadConnectors, 5000); }
-async function disconnectService(svc) { if (!confirm('Disconnect ' + svc + '?')) return; await fetch('/api/connectors/' + svc, { method: 'DELETE' }); loadConnectors(); }
-
-// ─── Approvals ────────────────────────────────────────────────────────────────
-async function loadApprovals() {
-  try {
-    const r = await fetch('/api/approvals');
-    const d = await r.json();
-    const pending = d.approvals?.filter(a => a.status === 'pending') || [];
-    const badge = document.getElementById('approval-badge');
-    if (pending.length) { badge.textContent = pending.length; badge.style.display = ''; }
-    else badge.style.display = 'none';
-    const el = document.getElementById('approvals-list');
-    if (!d.approvals?.length) { el.innerHTML = '<div class="empty">No pending approvals. All clear! ✓</div>'; return; }
-    el.innerHTML = d.approvals.map(a => {
-      let preview = '';
-      try { const p = JSON.parse(a.payload); preview = p.content || p.body || `${p.to}: ${p.subject}` || JSON.stringify(p).slice(0, 100); } catch {}
-      return `<div class="approval-item" style="border-color:${a.status==='pending'?'var(--yellow)':a.status==='approved'?'var(--green)':'var(--red)'}">
-        <div class="approval-type">${a.action_type.replace(/_/g,' ')}</div>
-        ${a.context ? `<div style="font-size:11px;color:var(--muted);margin:4px 0">${a.context}</div>` : ''}
-        <div class="approval-preview">${String(preview).slice(0, 200)}</div>
-        ${a.status === 'pending' ? `
-          <div class="approval-actions">
-            <button class="approve-btn yes" onclick="approveItem('${a.id}','approved')">✓ Approve</button>
-            <button class="approve-btn no" onclick="approveItem('${a.id}','rejected')">✕ Reject</button>
-          </div>` : `<span class="badge ${a.status==='approved'?'success':'error'}">${a.status}</span>`}
-      </div>`;
-    }).join('');
-  } catch {}
+async function saveIdentity() {
+  const body = {
+    agentName:   $('#s-agent-name').value,
+    userName:    $('#s-user-name').value,
+    description: $('#s-description').value,
+    soul:        $('#s-soul').value,
+  };
+  await fetch(`${WORKER_URL}/api/identity`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const badge = $('#save-badge');
+  badge.style.display = 'inline-flex';
+  setTimeout(() => badge.style.display = 'none', 2500);
+  toast('Identity saved');
 }
 
-async function approveItem(id, status) {
-  await fetch('/api/approvals/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status }) });
-  loadApprovals();
-}
-
-// ─── Performance ─────────────────────────────────────────────────────────────
-async function loadPerformance() {
-  try {
-    const r = await fetch('/api/performance');
-    const d = await r.json();
-    const s = d.plan_stats || {};
-    document.getElementById('p-total').textContent = s.total_plans ?? 0;
-    document.getElementById('p-done').textContent = s.completed_plans ?? 0;
-    document.getElementById('p-fail').textContent = s.failed_plans ?? 0;
-    document.getElementById('p-rate').textContent = (s.success_rate ?? 0) + '%';
-
-    // Tool usage
-    const tools = s.most_used_tools || [];
-    const maxCount = Math.max(...tools.map(t => t.count), 1);
-    document.getElementById('tool-usage-chart').innerHTML = tools.map(t => `
-      <div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
-          <span style="color:var(--accent2)">${t.tool}</span><span style="color:var(--muted)">${t.count}×</span>
-        </div>
-        <div class="perf-bar"><div class="perf-fill" style="width:${(t.count/maxCount*100).toFixed(1)}%"></div></div>
-      </div>`).join('') || '<div class="empty">No tool calls yet.</div>';
-
-    // Memory audit
-    const m = d.memory_audit || {};
-    document.getElementById('memory-audit').innerHTML = `
-      <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
-        <div class="stat"><div class="stat-val">${m.total ?? 0}</div><div class="stat-lbl">Total</div></div>
-        <div class="stat"><div class="stat-val">${m.high_freq_count ?? 0}</div><div class="stat-lbl">Core Facts</div></div>
-        <div class="stat"><div class="stat-val" style="color:var(--yellow)">${m.stale_count ?? 0}</div><div class="stat-lbl">Stale</div></div>
-      </div>
-      ${m.recommendations?.length ? m.recommendations.map(r => `<div class="reflection" style="margin-top:8px">💡 ${r}</div>`).join('') : ''}`;
-
-    // Events
-    const events = d.event_summary || [];
-    document.getElementById('event-log').innerHTML = events.map(e => `
-      <div class="log-item">
-        <span style="color:var(--accent2)">${e.type}</span>
-        <span class="badge active" style="margin-left:auto">${e.cnt}×</span>
-      </div>`).join('') || '<div class="empty">No events logged yet.</div>';
-  } catch(e) { console.error(e); }
-}
-
-// ─── Utilities ────────────────────────────────────────────────────────────────
-function timeAgo(ts) {
-  if (!ts) return '—';
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return s + 's ago';
-  if (s < 3600) return Math.floor(s/60) + 'm ago';
-  if (s < 86400) return Math.floor(s/3600) + 'h ago';
-  return Math.floor(s/86400) + 'd ago';
-}
-
-// ─── Polling for approvals ────────────────────────────────────────────────────
-async function checkApprovals() {
-  try {
-    const r = await fetch('/api/approvals');
-    const d = await r.json();
-    const pending = d.approvals?.filter(a => a.status === 'pending') || [];
-    const badge = document.getElementById('approval-badge');
-    if (pending.length) { badge.textContent = pending.length; badge.style.display = ''; }
-    else badge.style.display = 'none';
-  } catch {}
-}
-
-// ─── Init ─────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  initDropZone();
-  loadHistory();
-  checkApprovals();
-  setInterval(checkApprovals, 30000); // poll every 30s
-});
+// ── Boot ──────────────────────────────────────────────────────────────────────
+initChat();
 </script>
 </body>
 </html>
