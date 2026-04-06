@@ -372,7 +372,7 @@ app.get('/api/oauth/:provider/connect', async (c) => {
   if (!clientId) return c.json({ error: `${prov.clientIdKey} not configured in secrets` }, 400)
 
   const state = crypto.randomUUID()
-  await c.env.OAUTH_STATES.put(state, String(provider), { expirationTtl: 600 })
+  await (c.env.OAUTH_STATES as unknown as { put(k: string, v: string, opts?: object): Promise<void> }).put(String(state), String(provider), { expirationTtl: 600 })
 
   const workerUrl = c.env.WORKER_URL || `https://${c.req.header('host')}`
   const redirectUri = `${workerUrl}/api/oauth/${provider}/callback`
@@ -396,7 +396,7 @@ app.get('/api/oauth/:provider/callback', async (c) => {
 
   if (error) return c.html(`<h2>OAuth Error: ${error}</h2><p>Close this window and try again.</p>`)
 
-  const storedProvider = await c.env.OAUTH_STATES.get(state)
+  const storedProvider = await (c.env.OAUTH_STATES as KVNamespace).get(state as string)
   if (storedProvider !== provider) return c.html(`<h2>Invalid state</h2><p>CSRF check failed. Try again.</p>`)
 
   const prov = OAUTH_PROVIDERS[provider]
