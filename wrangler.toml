@@ -1,0 +1,67 @@
+name = "superagent"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+[ai]
+binding = "AI"
+
+[durable_objects]
+bindings = [
+  { name = "SUPER_AGENT", class_name = "SuperAgent" }
+]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["SuperAgent"]
+
+[[d1_databases]]
+binding       = "DB"
+database_name = "superagent-db"
+database_id   = "768abc87-231f-48bf-9150-3602e099b46c"
+
+[[r2_buckets]]
+binding     = "FILES"
+bucket_name = "superagent-files"
+
+[[vectorize]]
+binding    = "VECTORIZE"
+index_name = "superagent-knowledge"
+remote     = true
+
+[[kv_namespaces]]
+binding = "CACHE"
+id      = "042d97e687054c4e8c0102be6f7c8aae"
+
+[[kv_namespaces]]
+binding = "OAUTH_STATES"
+id      = "1db5a9038d5c4eca9ef085821a20e562"
+
+[[workflows]]
+binding    = "AUTOMATION_WORKFLOW"
+name       = "automation-workflow"
+class_name = "AutomationWorkflow"
+
+[[queues.producers]]
+binding = "TASK_QUEUE"
+queue   = "superagent-tasks"
+
+[assets]
+directory = "./public"
+binding   = "ASSETS"
+
+[vars]
+ENVIRONMENT = "production"
+WORKER_URL  = "https://superagent.workers.dev"
+
+[triggers]
+crons = ["0 9 * * 1","0 9 * * *"]
+
+[dev]
+port           = 8787
+local_protocol = "http"
+
+[observability]
+[observability.logs]
+enabled         = false
+invocation_logs = true
