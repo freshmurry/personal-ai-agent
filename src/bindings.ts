@@ -10,8 +10,7 @@ export type Bindings = {
   AI: Ai
   VECTORIZE: VectorizeIndex
 
-  // Cloudflare Browser Rendering — native REST API, no puppeteer
-  // Declared as `Fetcher` (service binding type from workers-types)
+  // Cloudflare Browser Rendering
   BROWSER: Fetcher
 
   // Durable Objects & Workflows
@@ -19,13 +18,18 @@ export type Bindings = {
   AUTOMATION_WORKFLOW: Workflow
   TASK_QUEUE: Queue<unknown>
 
-  // Secrets
+  // API Keys / Secrets
   ANTHROPIC_API_KEY: string
   OPENAI_API_KEY?: string
   GITHUB_ACCESS_TOKEN?: string
+
+  // OAuth App Credentials
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
-  SELF_CODING_ENABLED?: string
+  GITHUB_CLIENT_ID?: string
+  GITHUB_CLIENT_SECRET?: string
+  LINKEDIN_CLIENT_ID?: string
+  LINKEDIN_CLIENT_SECRET?: string
 
   // Vars
   ENVIRONMENT: 'development' | 'production'
