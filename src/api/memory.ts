@@ -4,12 +4,14 @@ import type { Bindings } from '../index'
 
 export const memory = new Hono<{ Bindings: Bindings }>()
 
+/* ─────────────── GET all memory ─────────────── */
 memory.get('/', async (c) => {
   const stmt = c.env.DB.prepare('SELECT * FROM memory')
   const { results } = await stmt.bind().all()
   return c.json(results ?? [])
 })
 
+/* ─────────────── POST add / update memory ─────────────── */
 memory.post('/', async (c) => {
   const { key, val, type = 'fact' } = await c.req.json()
 
@@ -32,18 +34,22 @@ memory.post('/', async (c) => {
   return c.json({ ok: true })
 })
 
+/* ─────────────── DELETE all memory ─────────────── */
 memory.delete('/', async (c) => {
-  await c.env.DB.prepare('DELETE FROM memory')
+  await c.env.DB
+    .prepare('DELETE FROM memory')
     .bind()
     .run()
 
   return c.json({ ok: true })
 })
 
+/* ─────────────── DELETE specific key ─────────────── */
 memory.delete('/:key', async (c) => {
   const key = c.req.param('key')
 
-  await c.env.DB.prepare('DELETE FROM memory WHERE key = ?')
+  await c.env.DB
+    .prepare('DELETE FROM memory WHERE key = ?')
     .bind(key)
     .run()
 

@@ -1,3 +1,5 @@
+PRAGMA foreign_keys = ON;
+
 -- ================================
 -- SuperAgent D1 Schema
 -- ================================
@@ -13,19 +15,28 @@ CREATE TABLE IF NOT EXISTS memory (
 );
 
 CREATE INDEX IF NOT EXISTS idx_memory_type ON memory(type);
-CREATE INDEX IF NOT EXISTS idx_memory_ts   ON memory(ts);
+CREATE INDEX IF NOT EXISTS idx_memory_ts ON memory(ts);
 
--- CONVERSATIONS (chat history)
+-- MEMORY LINKS (semantic graph)
+CREATE TABLE IF NOT EXISTS memory_links (
+  a TEXT NOT NULL,
+  b TEXT NOT NULL,
+  weight REAL DEFAULT 1.0,
+  created INTEGER NOT NULL,
+  PRIMARY KEY (a, b)
+);
+
+-- CONVERSATIONS
 CREATE TABLE IF NOT EXISTS conversations (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
-  role    TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  role    TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
   content TEXT NOT NULL,
   ts      INTEGER NOT NULL,
   summary INTEGER DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_conversations_ts
-  ON conversations(ts);
+ON conversations(ts);
 
 -- FILE METADATA
 CREATE TABLE IF NOT EXISTS files (
@@ -62,12 +73,15 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id TEXT,
   provider TEXT,
-  access_token  TEXT NOT NULL,
+  access_token TEXT NOT NULL,
   refresh_token TEXT,
-  expires_at    INTEGER,
-  scope         TEXT,
-  created       INTEGER NOT NULL
+  expires_at INTEGER,
+  scope TEXT,
+  created INTEGER NOT NULL
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth_user_provider
+ON oauth_tokens(user_id, provider);
 
 -- GOALS
 CREATE TABLE IF NOT EXISTS goals (
@@ -93,23 +107,60 @@ CREATE TABLE IF NOT EXISTS plans (
   FOREIGN KEY(goal_id) REFERENCES goals(id)
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_step
+ON plans(goal_id, step_no);
+
+-- TASKS (execution units)
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  goal_id TEXT,
+  plan_id TEXT,
+  name TEXT,
+  input TEXT,
+  status TEXT DEFAULT 'pending',
+  attempts INTEGER DEFAULT 0,
+  max_attempts INTEGER DEFAULT 3,
+  created INTEGER NOT NULL,
+  updated INTEGER,
+  FOREIGN KEY(goal_id) REFERENCES goals(id)
+);
+
 -- TOOL RUNS
 CREATE TABLE IF NOT EXISTS tool_runs (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  tool_name  TEXT NOT NULL,
-  input      TEXT,
-  output     TEXT,
-  success    INTEGER DEFAULT 1,
-  error      TEXT,
-  ts         INTEGER NOT NULL
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tool_name TEXT NOT NULL,
+  input TEXT,
+  output TEXT,
+  success INTEGER DEFAULT 1,
+  error TEXT,
+  ts INTEGER NOT NULL
+);
+
+-- FAILURES (learning signal)
+CREATE TABLE IF NOT EXISTS failures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source TEXT,
+  context TEXT,
+  reason TEXT,
+  ts INTEGER NOT NULL
 );
 
 -- REFLECTIONS
 CREATE TABLE IF NOT EXISTS reflections (
-  id        INTEGER PRIMARY KEY AUTOINCREMENT,
-  context   TEXT NOT NULL,
-  insight   TEXT NOT NULL,
-  ts        INTEGER NOT NULL
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  context TEXT NOT NULL,
+  insight TEXT NOT NULL,
+  ts INTEGER NOT NULL
+);
+
+-- EVALUATIONS (self-critique)
+CREATE TABLE IF NOT EXISTS evaluations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  goal_id TEXT,
+  score REAL,
+  feedback TEXT,
+  ts INTEGER NOT NULL,
+  FOREIGN KEY(goal_id) REFERENCES goals(id)
 );
 
 -- APPROVALS (Human-in-the-loop)
@@ -117,6 +168,26 @@ CREATE TABLE IF NOT EXISTS approvals (
   id TEXT PRIMARY KEY,
   type TEXT,
   payload TEXT,
-  status TEXT,
+  status TEXT CHECK (status IN ('pending', 'approved', 'rejected')),
   created INTEGER
 );
+
+-- AGENT STATE (resumable autonomy)
+CREATE TABLE IF NOT EXISTS agent_state (
+  id TEXT PRIMARY KEY,
+  current_goal TEXT,
+  current_plan TEXT,
+  phase TEXT,
+  confidence REAL DEFAULT 0.5,
+  updated INTEGER NOT NULL
+);
+
+-- Aent can reason about its own DB state
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version TEXT PRIMARY KEY,
+  applied INTEGER NOT NULL
+);
+
+
+INSERT OR IGNORE INTO schema_migrations (version, applied)
+VALUES ('2026-04-agent-core', strftime('%s','now'));

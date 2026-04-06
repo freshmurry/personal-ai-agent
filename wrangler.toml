@@ -19,6 +19,7 @@ bindings = [
 
 [[migrations]]
 tag = "v3"
+new_classes = ["SessionDO", "AgentDO"]
 # no-op, schema unchanged
 
 # ─── D1 ───────────────────────────────────────────────────────────────────────
