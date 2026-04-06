@@ -1,18 +1,5 @@
+// src/api/memory.ts
 import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-
-import { SuperAgent } from './agent/engine'
-import { FileIntelligence } from './agent/file-intelligence'
-
-import { AgentDO, SessionDO } from './durable-objects'
-export { AgentDO, SessionDO }
-
-import { AutomationWorkflow } from './workflow'
-export { AutomationWorkflow }
-
-import { memory } from '../public/memory'
-
-import type { ExecutionContext } from '@cloudflare/workers-types'
 
 export type Bindings = {
   DB: D1Database
@@ -25,109 +12,57 @@ export type Bindings = {
   ENVIRONMENT: 'development' | 'production'
 }
 
-const app = new Hono<{ Bindings: Bindings }>()
-app.use('*', cors({ origin: '*' }))
 
-/* ─────────────── MEMORY ─────────────── */
-app.route('/api/memory', memory)
+export const memory = new Hono<{ Bindings: Bindings }>()
 
-/* ─────────────── CHAT ─────────────── */
-app.post('/api/chat', async (c) => {
-  try {
-    const body = await c.req.json()
-    const userText = body.messages?.at(-1)?.content ?? ''
-    const now = Date.now()
+/* ─────────────── GET all memory ─────────────── */
+memory.get('/', async (c) => {
+  const stmt = c.env.DB.prepare('SELECT * FROM memory')
+  const { results } = await stmt.bind().all()
+  return c.json(results ?? [])
+})
 
-    const agent = new SuperAgent(c.env)
-    const assistantText = await agent.run({
-      userId: 'default',
-      sessionId: 'default',
-      query: userText,
-    })
+/* ─────────────── POST add / update memory ─────────────── */
+memory.post('/', async (c) => {
+  const { key, val, type = 'fact' } = await c.req.json()
 
-    await c.env.DB.prepare(
-      `INSERT INTO conversations (role, content, ts)
-       VALUES (?, ?, ?), (?, ?, ?)`
-    )
-      .bind('user', userText, now, 'assistant', assistantText, now + 1)
-      .run()
-
-    return c.json({
-      messages: [
-        { role: 'user', content: userText },
-        { role: 'assistant', content: assistantText },
-      ],
-    })
-  } catch (err: any) {
-    console.error('CHAT ERROR:', err)
-
-    // ✅ ALWAYS return JSON
-    return c.json(
-      {
-        error: 'Internal server error',
-        detail: err?.message ?? String(err),
-      },
-      500
-    )
+  if (!key || !val) {
+    return c.json({ error: 'Missing key or value' }, 400)
   }
-})
 
-/* ─────────────── HISTORY ─────────────── */
-app.get('/api/history', async (c) => {
-  const { results } = await c.env.DB
-    .prepare(`SELECT role, content FROM conversations ORDER BY ts ASC`)
-    .all()
-
-  return c.json({ messages: results ?? [] })
-})
-
-app.post('/api/history', async () => Response.json({ ok: true }))
-
-/* ─────────────── IDENTITY ─────────────── */
-app.get('/api/identity', async () =>
-  Response.json({ id: 'default', name: 'User' })
-)
-
-/* ─────────────── FILES ─────────────── */
-app.put('/api/files/:key{.+}', async (c) => {
-  const key = c.req.param('key')
-  const body = await c.req.arrayBuffer()
-
-  await c.env.FILES.put(key, body)
-  const fi = new FileIntelligence(c.env)
-  await fi.processFile(key, body)
+  await c.env.DB.prepare(`
+    INSERT INTO memory (key, val, type, freq, ts)
+    VALUES (?, ?, ?, 1, ?)
+    ON CONFLICT(key) DO UPDATE SET
+      val = excluded.val,
+      type = excluded.type,
+      freq = freq + 1,
+      ts = excluded.ts
+  `)
+    .bind(key, val, type, Date.now())
+    .run()
 
   return c.json({ ok: true })
 })
 
-/* ─────────────── MODULE EXPORTS ─────────────── */
+/* ─────────────── DELETE all memory ─────────────── */
+memory.delete('/', async (c) => {
+  await c.env.DB
+    .prepare('DELETE FROM memory')
+    .bind()
+    .run()
 
-// ✅ required for module workers + Durable Objects
-export default {
-  fetch: app.fetch,
-}
+  return c.json({ ok: true })
+})
 
-// ✅ scheduled handler
-export const scheduled = async (
-  _event: any,
-  env: Bindings,
-  ctx: ExecutionContext,
-) => {
-  ctx.waitUntil(
-    env.AUTOMATION_WORKFLOW.create({
-      params: { trigger: 'heartbeat' },
-    }),
-  )
-}
+/* ─────────────── DELETE specific key ─────────────── */
+memory.delete('/:key', async (c) => {
+  const key = c.req.param('key')
 
-// ✅ EXACTLY ONE queue handler (REQUIRED)
-export const queue = async (batch: {
-  messages: {
-    body: unknown
-    ack(): void
-  }[]
-}) => {
-  for (const msg of batch.messages) {
-    msg.ack()
-  }
-}
+  await c.env.DB
+    .prepare('DELETE FROM memory WHERE key = ?')
+    .bind(key)
+    .run()
+
+  return c.json({ ok: true })
+})

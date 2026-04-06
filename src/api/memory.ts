@@ -1,20 +1,21 @@
-// public/memory.ts
+// src/api/memory.ts
 import { Hono } from 'hono'
-
-type Bindings = {
-  DB: D1Database
-}
+import type { Bindings } from '../index'
 
 export const memory = new Hono<{ Bindings: Bindings }>()
 
 memory.get('/', async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT * FROM memory').all()
-  return c.json(results)
+  const stmt = c.env.DB.prepare('SELECT * FROM memory')
+  const { results } = await stmt.bind().all()
+  return c.json(results ?? [])
 })
 
 memory.post('/', async (c) => {
   const { key, val, type = 'fact' } = await c.req.json()
-  if (!key || !val) return c.json({ error: 'Missing key or value' }, 400)
+
+  if (!key || !val) {
+    return c.json({ error: 'Missing key or value' }, 400)
+  }
 
   await c.env.DB.prepare(`
     INSERT INTO memory (key, val, type, freq, ts)
@@ -32,12 +33,19 @@ memory.post('/', async (c) => {
 })
 
 memory.delete('/', async (c) => {
-  await c.env.DB.prepare('DELETE FROM memory').run()
+  await c.env.DB.prepare('DELETE FROM memory')
+    .bind()
+    .run()
+
   return c.json({ ok: true })
 })
 
 memory.delete('/:key', async (c) => {
   const key = c.req.param('key')
-  await c.env.DB.prepare('DELETE FROM memory WHERE key = ?').bind(key).run()
+
+  await c.env.DB.prepare('DELETE FROM memory WHERE key = ?')
+    .bind(key)
+    .run()
+
   return c.json({ ok: true })
 })

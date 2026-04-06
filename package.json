@@ -8,7 +8,8 @@
     "deploy:db": "wrangler d1 execute superagent-db --file=src/db/schema.sql --remote",
     "secrets:push": "node scripts/push-secrets.mjs",
     "logs": "wrangler tail",
-    "types": "wrangler types"
+    "types": "wrangler types",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "hono": "^4.12.10"
