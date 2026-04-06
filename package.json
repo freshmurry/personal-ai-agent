@@ -1,6 +1,6 @@
 {
   "name": "personal-ai-agent",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
@@ -12,10 +12,10 @@
   },
   "dependencies": {
     "agents": "^0.9.0",
+    "@cloudflare/ai-chat": "^0.3.2",
     "ai": "^6.0.0",
     "@ai-sdk/anthropic": "^3.0.0",
     "@ai-sdk/openai": "^3.0.0",
-    "@cloudflare/puppeteer": "^0.0.35",
     "hono": "^4.12.10",
     "zod": "^4.0.0"
   },
