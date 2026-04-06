@@ -3,20 +3,33 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 
 import type { Bindings } from './bindings'
-
 import { memory } from './api/memory'
 import { SuperAgent } from './agent/engine'
 import { AgentDO, SessionDO } from './durable-objects'
 import { AutomationWorkflow } from './workflow'
 
 const app = new Hono<{ Bindings: Bindings }>()
-
 app.use('*', cors())
 
-/* ─────────────── Memory API ─────────────── */
+/* ───────── MEMORY ───────── */
 app.route('/api/memory', memory)
 
-/* ─────────────── Chat API ─────────────── */
+/* ───────── IDENTITY ───────── */
+app.get('/api/identity', async () => {
+  return Response.json({ id: 'default', name: 'User' })
+})
+
+/* ───────── HISTORY ───────── */
+app.get('/api/history', async (c) => {
+  const stmt = c.env.DB.prepare(
+    'SELECT role, content FROM conversations ORDER BY ts ASC'
+  )
+  const { results } = await stmt.bind().all()
+
+  return c.json({ messages: results ?? [] })
+})
+
+/* ───────── CHAT ───────── */
 app.post('/api/chat', async (c) => {
   const body = await c.req.json()
   const text = body?.messages?.at(-1)?.content ?? ''
@@ -29,11 +42,10 @@ app.post('/api/chat', async (c) => {
   })
 })
 
-/* ─────────────── Exports ─────────────── */
+/* ───────── EXPORTS ───────── */
 export { SessionDO, AgentDO }
 export { AutomationWorkflow }
 
-/* ✅ REQUIRED FOR MODULE WORKER */
 export default {
   fetch: app.fetch,
 }
