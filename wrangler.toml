@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [ai]
 binding = "AI"
 
-# Cloudflare Browser Rendering — replaces Brave API key entirely
+# Cloudflare Browser Rendering — native REST API, no puppeteer
 [browser]
 binding = "BROWSER"
 
