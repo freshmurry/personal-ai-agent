@@ -4,54 +4,24 @@ import type { Bindings } from '../bindings'
 
 export const memory = new Hono<{ Bindings: Bindings }>()
 
-/* ─────────────── GET all memory ─────────────── */
 memory.get('/', async (c) => {
-  const stmt = c.env.DB.prepare('SELECT * FROM memory')
-  const { results } = await stmt.bind().all()
-  return c.json(results ?? [])
+  const { results } = await c.env.DB.prepare(
+    `SELECT key, val, type, freq, ts FROM memory WHERE key != '__identity__' ORDER BY freq DESC, ts DESC LIMIT 100`
+  ).all()
+  return c.json({ memories: results })
 })
 
-/* ─────────────── POST add / update memory ─────────────── */
 memory.post('/', async (c) => {
-  const { key, val, type = 'fact' } = await c.req.json()
-
-  if (!key || !val) {
-    return c.json({ error: 'Missing key or value' }, 400)
-  }
-
-  await c.env.DB.prepare(`
-    INSERT INTO memory (key, val, type, freq, ts)
-    VALUES (?, ?, ?, 1, ?)
-    ON CONFLICT(key) DO UPDATE SET
-      val = excluded.val,
-      type = excluded.type,
-      freq = freq + 1,
-      ts = excluded.ts
-  `)
-    .bind(key, val, type, Date.now())
-    .run()
-
-  return c.json({ ok: true })
+  const { key, value, type } = await c.req.json<{ key: string; value: string; type?: string }>()
+  const k = key.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40)
+  await c.env.DB.prepare(
+    `INSERT INTO memory (key, val, type, freq, ts, last_access) VALUES (?, ?, ?, 1, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET val=excluded.val, type=excluded.type, freq=freq+1, ts=excluded.ts`
+  ).bind(k, value.slice(0, 500), type ?? 'fact', Date.now(), Date.now()).run()
+  return c.json({ ok: true, key: k })
 })
 
-/* ─────────────── DELETE all memory ─────────────── */
-memory.delete('/', async (c) => {
-  await c.env.DB
-    .prepare('DELETE FROM memory')
-    .bind()
-    .run()
-
-  return c.json({ ok: true })
-})
-
-/* ─────────────── DELETE specific key ─────────────── */
 memory.delete('/:key', async (c) => {
-  const key = c.req.param('key')
-
-  await c.env.DB
-    .prepare('DELETE FROM memory WHERE key = ?')
-    .bind(key)
-    .run()
-
+  await c.env.DB.prepare(`DELETE FROM memory WHERE key = ?`).bind(c.req.param('key')).run()
   return c.json({ ok: true })
 })
