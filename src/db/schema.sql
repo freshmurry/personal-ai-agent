@@ -1,4 +1,4 @@
--- SuperAgent D1 Database Schema
+-- SuperAgent D1 Database Schema v4
 
 CREATE TABLE IF NOT EXISTS memory (
   key         TEXT PRIMARY KEY,
@@ -13,17 +13,18 @@ CREATE TABLE IF NOT EXISTS conversations (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
   role    TEXT NOT NULL,
   content TEXT NOT NULL,
+  summary INTEGER DEFAULT 0,
   ts      INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_role_ts ON conversations(role, ts);
 
 CREATE TABLE IF NOT EXISTS goals (
-  id          TEXT PRIMARY KEY,
-  title       TEXT NOT NULL,
-  description TEXT,
-  priority    INTEGER DEFAULT 0,
-  status      TEXT DEFAULT 'active',
-  created     INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+  id           TEXT PRIMARY KEY,
+  description  TEXT NOT NULL,
+  status       TEXT DEFAULT 'active',
+  priority     INTEGER DEFAULT 5,
+  created      INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+  last_updated INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
 );
 
 CREATE TABLE IF NOT EXISTS automations (
@@ -46,4 +47,12 @@ CREATE TABLE IF NOT EXISTS approvals (
   payload     TEXT NOT NULL,
   status      TEXT DEFAULT 'pending',
   created     INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+);
+
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+  service       TEXT PRIMARY KEY,
+  access_token  TEXT NOT NULL,
+  refresh_token TEXT DEFAULT '',
+  expires_at    INTEGER NOT NULL,
+  created_at    INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
 );
