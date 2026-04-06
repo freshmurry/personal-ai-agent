@@ -11,14 +11,13 @@ export type Bindings = {
   VECTORIZE: VectorizeIndex
 
   // Cloudflare Browser Rendering — native REST API, no puppeteer
-  // Declared as `any` because the Fetcher type from @cloudflare/workers-types
-  // may not be available in all tsconfig setups.
-  BROWSER: any
+  // Declared as `Fetcher` (service binding type from workers-types)
+  BROWSER: Fetcher
 
   // Durable Objects & Workflows
   SUPER_AGENT: DurableObjectNamespace
   AUTOMATION_WORKFLOW: Workflow
-  TASK_QUEUE: Queue
+  TASK_QUEUE: Queue<unknown>
 
   // Secrets
   ANTHROPIC_API_KEY: string
