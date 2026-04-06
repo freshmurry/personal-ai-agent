@@ -14,12 +14,11 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
-    "esModuleInterop": false,
+    "esModuleInterop": true,
     "isolatedModules": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "allowImportingTsExtensions": false,
-    "ignoreDeprecations": "6.0"
+    "allowImportingTsExtensions": false
   },
   "include": [
     "src/**/*.ts"
