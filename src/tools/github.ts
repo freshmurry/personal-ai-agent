@@ -1,116 +1,86 @@
 // src/tools/github.ts
-// SELF-CODING TOOL — GitHub PR CREATION (SAFE, GOVERNED)
+import type { Bindings } from '../bindings'
 
-export interface CodeChangeProposal {
-  repo: string;              // "owner/repo"
-  branch: string;            // e.g. "agent-autogen-123"
-  title: string;
-  description: string;       // rationale + risk summary
-  files: Array<{
-    path: string;
-    content: string;         // full file content (overwrite-safe)
-  }>;
+interface ProposeChangeInput {
+  repo: string
+  branch: string
+  title: string
+  description: string
+  files: Array<{ path: string; content: string }>
 }
 
 export class GitHubTool {
-  constructor(private env: any) {}
+  constructor(private env: Bindings) {}
 
-  private async api(path: string, opts: RequestInit = {}) {
-    const resp = await fetch(`https://api.github.com${path}`, {
-      ...opts,
-      headers: {
-        'Accept': 'application/vnd.github+json',
-        'Authorization': `Bearer ${this.env.GITHUB_ACCESS_TOKEN}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-        ...(opts.headers || {})
-      }
-    });
-    if (!resp.ok) {
-      const t = await resp.text();
-      throw new Error(`GitHub API error ${resp.status}: ${t}`);
+  async proposeChange(input: ProposeChangeInput): Promise<{ pr_url?: string; error?: string }> {
+    const token = this.env.GITHUB_ACCESS_TOKEN
+    if (!token) return { error: 'GITHUB_ACCESS_TOKEN not configured' }
+
+    const [owner, repo] = input.repo.split('/')
+    const base = 'HEAD'
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28',
     }
-    return resp.json();
-  }
 
-  async createBranch(repo: string, base: string, branch: string) {
-    const ref: any = await this.api(`/repos/${repo}/git/ref/heads/${base}`);
-    await this.api(`/repos/${repo}/git/refs`, {
-      method: 'POST',
-      body: JSON.stringify({
-        ref: `refs/heads/${branch}`,
-        sha: ref.object.sha
-      })
-    });
-  }
-
-  async putFile(repo: string, branch: string, path: string, content: string) {
-    // Check if file exists to get sha
-    let sha: string | undefined;
     try {
-      const existing: any = await this.api(
-        `/repos/${repo}/contents/${encodeURIComponent(path)}?ref=${branch}`
-      );
-      sha = existing.sha;
-    } catch {}
+      // Get default branch SHA
+      const refRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/ref/heads/main`, { headers })
+      const refData = await refRes.json() as { object?: { sha: string } }
+      const sha = refData?.object?.sha
+      if (!sha) return { error: 'Could not get repo HEAD SHA' }
 
-    await this.api(`/repos/${repo}/contents/${encodeURIComponent(path)}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        message: `agent: update ${path}`,
-        content: btoa(unescape(encodeURIComponent(content))),
-        branch,
-        sha
+      // Create branch
+      await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ref: `refs/heads/${input.branch}`, sha }),
       })
-    });
-  }
 
-  async openPR(repo: string, base: string, head: string, title: string, body: string) {
-    return this.api(`/repos/${repo}/pulls`, {
-      method: 'POST',
-      body: JSON.stringify({
-        title,
-        body,
-        base,
-        head
+      // Commit each file
+      for (const file of input.files) {
+        const encoded = btoa(unescape(encodeURIComponent(file.content)))
+        // Check if file exists for SHA
+        let fileSha: string | undefined
+        try {
+          const existing = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${file.path}?ref=${input.branch}`, { headers })
+          if (existing.ok) {
+            const d = await existing.json() as { sha?: string }
+            fileSha = d?.sha
+          }
+        } catch { /* new file */ }
+
+        const body: Record<string, string> = {
+          message: `chore: update ${file.path}`,
+          content: encoded,
+          branch: input.branch,
+        }
+        if (fileSha) body.sha = fileSha
+
+        await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${file.path}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify(body),
+        })
+      }
+
+      // Create PR
+      const prRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          title: input.title,
+          body: input.description,
+          head: input.branch,
+          base: 'main',
+        }),
       })
-    });
-  }
-
-  // MAIN ENTRY — SAFE SELF-CODING
-  async proposeChange(proposal: CodeChangeProposal) {
-    // GOVERNORS (hard stop without approval flag)
-    if (!this.env.SELF_CODING_ENABLED) {
-      throw new Error('Self-coding disabled by governor');
+      const pr = await prRes.json() as { html_url?: string }
+      return { pr_url: pr?.html_url }
+    } catch (e: unknown) {
+      return { error: e instanceof Error ? e.message : String(e) }
     }
-
-    // 1) Create branch from main
-    await this.createBranch(proposal.repo, 'main', proposal.branch);
-
-    // 2) Write files exactly as provided (no partial diffs)
-    for (const f of proposal.files) {
-      await this.putFile(proposal.repo, proposal.branch, f.path, f.content);
-    }
-
-    // 3) Open PR (human approval gate)
-    const pr: any = await this.openPR(
-      proposal.repo,
-      'main',
-      proposal.branch,
-      proposal.title,
-      proposal.description
-    );
-
-    // 4) Log proposal
-    await this.env.DB.prepare(
-      `INSERT INTO tool_runs (tool_name, input, output, ts)
-       VALUES (?, ?, ?, ?)`
-    ).bind(
-      'github_propose_change',
-      JSON.stringify(proposal),
-      JSON.stringify({ pr_url: pr.html_url }),
-      Date.now()
-    ).run();
-
-    return { pr_url: pr.html_url };
   }
 }
