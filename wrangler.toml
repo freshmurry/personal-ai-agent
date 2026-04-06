@@ -1,7 +1,6 @@
 name = "superagent"
 main = "src/index.ts"
 compatibility_date = "2025-03-01"
-compatibility_flags = ["nodejs_compat"]
 
 # account_id is auto-detected in Cloudflare CI. Do NOT set it here.
 # If wrangler asks locally, run: wrangler whoami
@@ -12,9 +11,11 @@ binding = "AI"
 
 # ─── Durable Objects ──────────────────────────────────────────────────────────
 
-[[durable_objects.bindings]]
-name = "SESSION"
-class_name = "SessionDO"
+[durable_objects]
+bindings = [
+  { name = "SESSION", class_name = "SessionDO" },
+  { name = "AGENT", class_name = "AgentDO" }
+]
 
 [[migrations]]
 tag = "v3"
@@ -38,6 +39,7 @@ bucket_name = "superagent-files"
 [[vectorize]]
 binding    = "VECTORIZE"
 index_name = "superagent-knowledge"
+remote = true
 
 # ─── KV Namespaces ────────────────────────────────────────────────────────────
 # Run: wrangler kv namespace create CACHE       →  paste id below
@@ -61,12 +63,6 @@ class_name = "AutomationWorkflow"
 [[queues.producers]]
 binding = "TASK_QUEUE"
 queue   = "superagent-tasks"
-
-[[queues.consumers]]
-queue             = "superagent-tasks"
-max_batch_size    = 10
-max_batch_timeout = 30
-max_retries       = 3
 
 # ─── Static assets ────────────────────────────────────────────────────────────
 [assets]

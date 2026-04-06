@@ -33,7 +33,7 @@ export class GitHubTool {
   }
 
   async createBranch(repo: string, base: string, branch: string) {
-    const ref = await this.api(`/repos/${repo}/git/ref/heads/${base}`);
+    const ref: any = await this.api(`/repos/${repo}/git/ref/heads/${base}`);
     await this.api(`/repos/${repo}/git/refs`, {
       method: 'POST',
       body: JSON.stringify({
@@ -47,7 +47,7 @@ export class GitHubTool {
     // Check if file exists to get sha
     let sha: string | undefined;
     try {
-      const existing = await this.api(
+      const existing: any = await this.api(
         `/repos/${repo}/contents/${encodeURIComponent(path)}?ref=${branch}`
       );
       sha = existing.sha;
@@ -92,7 +92,7 @@ export class GitHubTool {
     }
 
     // 3) Open PR (human approval gate)
-    const pr = await this.openPR(
+    const pr: any = await this.openPR(
       proposal.repo,
       'main',
       proposal.branch,

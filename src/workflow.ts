@@ -121,7 +121,7 @@ export class AutomationWorkflow extends WorkflowEntrypoint<{
             tools: tools
           }),
         });
-        return await resp.json();
+        return null;
       });
 
       const msg = (aiResponse as any);

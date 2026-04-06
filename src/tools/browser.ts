@@ -1,13 +1,37 @@
 /**
- *  * Browser Rendering & Web Search Tool
-  */
+ * Browser Rendering & Web Search Tool
+ */
 
-  export class BrowserTool {
-    constructor(private env: any) {}
+export class BrowserTool {
+  constructor(private env: any) {}
 
-      async searchWeb(query: string) {
-          // For a simple $5 plan approach, use a Search API (Brave/Serper/Tavily)
-              // Claude 3.5 is great at parsing these results.
-                  const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`;
-                      
-                          // Note: Requires a BRAVE_API_KEY in your secrets
+  async searchWeb(query: string) {
+    if (!this.env.BRAVE_API_KEY) {
+      throw new Error('BRAVE_API_KEY is not set');
+    }
+
+    const searchUrl =
+      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`;
+
+    const resp = await fetch(searchUrl, {
+      headers: {
+        Accept: 'application/json',
+        'X-Subscription-Token': this.env.BRAVE_API_KEY,
+      },
+    });
+
+    if (!resp.ok) {
+      throw new Error(`Brave search failed: ${resp.status}`);
+    }
+
+    const data: any = await resp.json();
+
+    return (
+      data.web?.results?.slice(0, 3).map((r: any) => ({
+        title: r.title,
+        description: r.description,
+        url: r.url,
+      })) ?? []
+    );
+  }
+}
