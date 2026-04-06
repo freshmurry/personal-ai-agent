@@ -1,6 +1,6 @@
 // src/durable-objects.ts
 import type { DurableObjectState } from '@cloudflare/workers-types'
-import type { Bindings } from './index'
+import type { Bindings } from './bindings'
 
 export class SessionDO {
   constructor(

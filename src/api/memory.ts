@@ -1,6 +1,6 @@
 // src/api/memory.ts
 import { Hono } from 'hono'
-import type { Bindings } from '../index'
+import type { Bindings } from '../bindings'
 
 export const memory = new Hono<{ Bindings: Bindings }>()
 

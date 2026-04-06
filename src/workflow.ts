@@ -1,7 +1,7 @@
 // src/workflow.ts
 import { Workflow } from '@cloudflare/workers-types'
 import type { ExecutionContext } from '@cloudflare/workers-types'
-import type { Bindings } from './index'
+import type { Bindings } from './bindings'
 
 import { Connectors } from './connectors'
 import { BrowserTool } from './tools/browser'
