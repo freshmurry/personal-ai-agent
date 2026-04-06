@@ -1,4 +1,4 @@
-name = "superagent"
+name = "personal-ai-agent"
 main = "src/index.ts"
 compatibility_date = "2025-03-01"
 compatibility_flags = ["nodejs_compat"]
@@ -47,7 +47,7 @@ name       = "automation-workflow"
 class_name = "AutomationWorkflow"
 
 [[queues.producers]]
-binding = "TASK_QUEUE"
+binding = "MY_QUEUE"
 queue   = "superagent-tasks"
 
 [assets]
