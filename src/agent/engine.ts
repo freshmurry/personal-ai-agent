@@ -439,17 +439,22 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
   }
 
   async onChatMessage(
-    onFinish: Parameters<AIChatAgent<Bindings, AgentState>['onChatMessage']>[0],
-    options?: Parameters<AIChatAgent<Bindings, AgentState>['onChatMessage']>[1]
-  ) {
+    _onFinish?: Parameters<AIChatAgent<Bindings, AgentState>['onChatMessage']>[0],
+    _options?: Parameters<AIChatAgent<Bindings, AgentState>['onChatMessage']>[1]
+  ): Promise<Response | undefined> {
     this.setState({ ...this.state, status: 'thinking', lastActivity: Date.now() })
     const tools = this.buildTools()
     const systemPrompt = this.getSystemPrompt()
 
-    // Convert UI messages to model messages
+    // AIChatAgent base class persists messages automatically.
+    // We just convert the current this.messages into model messages.
     const modelMessages = await convertToModelMessages(this.messages)
 
-    // PRIMARY: Cloudflare Workers AI
+    const resetState = () => {
+      this.setState({ ...this.state, status: 'idle', currentTool: undefined, lastActivity: Date.now() })
+    }
+
+    // PRIMARY: Cloudflare Workers AI (llama-3.3-70b)
     try {
       const workersai = createWorkersAI({ binding: this.env.AI })
 
@@ -459,22 +464,17 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
         messages: modelMessages,
         tools,
         stopWhen: stepCountIs(10),
-        onFinish: async (finishResult) => {
-          this.setState({ ...this.state, status: 'idle', currentTool: undefined })
-          await (onFinish as unknown as (r: typeof finishResult) => Promise<void>)(finishResult)
-        },
-        onError: (err) => {
-          console.error('[SuperAgent] CF AI stream error:', err)
-          this.setState({ ...this.state, status: 'error' })
-        },
+        onFinish: () => resetState(),
       })
 
       return result.toUIMessageStreamResponse()
 
     } catch (cfErr) {
       console.error('[SuperAgent] CF Workers AI failed, falling back to Anthropic:', cfErr)
+    }
 
-      // FALLBACK: Anthropic Claude Haiku
+    // FALLBACK: Anthropic Claude Haiku
+    try {
       const anthropic = createAnthropic({ apiKey: this.env.ANTHROPIC_API_KEY })
 
       const result = streamText({
@@ -483,17 +483,18 @@ export class SuperAgent extends AIChatAgent<Bindings, AgentState> {
         messages: modelMessages,
         tools,
         stopWhen: stepCountIs(10),
-        onFinish: async (finishResult) => {
-          this.setState({ ...this.state, status: 'idle', currentTool: undefined })
-          await (onFinish as unknown as (r: typeof finishResult) => Promise<void>)(finishResult)
-        },
-        onError: (err) => {
-          console.error('[SuperAgent] Anthropic fallback error:', err)
-          this.setState({ ...this.state, status: 'error' })
-        },
+        onFinish: () => resetState(),
       })
 
       return result.toUIMessageStreamResponse()
+
+    } catch (antErr) {
+      console.error('[SuperAgent] Anthropic fallback also failed:', antErr)
+      this.setState({ ...this.state, status: 'error' })
+      return new Response(JSON.stringify({ error: 'All AI models unavailable. Check API keys.' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
   }
 }
