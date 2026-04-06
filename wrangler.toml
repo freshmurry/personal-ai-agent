@@ -73,3 +73,7 @@ local_protocol = "http"
 [observability.logs]
 enabled         = false
 invocation_logs = true
+
+[[migrations]]
+tag = "v6"
+new_sqlite_classes = []
