@@ -13,13 +13,13 @@ binding = "AI"
 
 [durable_objects]
 bindings = [
-  { name = "SESSION", class_name = "SessionDO" },
-  { name = "AGENT", class_name = "AgentDO" }
+  { name = "SESSION", class_name = "personal-ai-agent_SessionDO" },
+  { name = "AGENT", class_name = "personal-ai-agent_AgentDO" }
 ]
 
 [[migrations]]
 tag = "v3"
-new_classes = ["SessionDO", "AgentDO"]
+new_classes = ["personal-ai-agent_SessionDO", "personal-ai-agent_AgentDO"]
 # no-op, schema unchanged
 
 # ─── D1 ───────────────────────────────────────────────────────────────────────
