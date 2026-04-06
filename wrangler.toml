@@ -6,6 +6,10 @@ compatibility_flags = ["nodejs_compat"]
 [ai]
 binding = "AI"
 
+# Cloudflare Browser Rendering — replaces Brave API key entirely
+[browser]
+binding = "BROWSER"
+
 [durable_objects]
 bindings = [
   { name = "SUPER_AGENT", class_name = "SuperAgent" }
