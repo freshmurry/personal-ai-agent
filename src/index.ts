@@ -479,7 +479,7 @@ app.get('/api/connectors/:service/auth', async (c) => {
   const clientId = (c.env as any)[prov.clientIdKey]
   if (!clientId) return c.html(`<h2>Missing ${prov.clientIdKey}</h2><p>Set this secret in your Cloudflare Worker: <code>wrangler secret put ${prov.clientIdKey}</code></p>`)
   const state = crypto.randomUUID()
-  await (c.env.OAUTH_STATES as KVNamespace).put(state, service, { expirationTtl: 600 })
+  await (c.env.OAUTH_STATES as KVNamespace).put(state, String(service), { expirationTtl: 600 })
   const workerUrl = c.env.WORKER_URL || `https://${c.req.header('host')}`
   const redirectUri = `${workerUrl}/api/connectors/${service}/callback`
   const params = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: 'code', scope: prov.scopes.join(' '), state, access_type: 'offline', prompt: 'consent' })
