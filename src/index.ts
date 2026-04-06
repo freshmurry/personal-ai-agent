@@ -372,7 +372,7 @@ app.get('/api/oauth/:provider/connect', async (c) => {
   if (!clientId) return c.json({ error: `${prov.clientIdKey} not configured in secrets` }, 400)
 
   const state = crypto.randomUUID()
-  await c.env.OAUTH_STATES.put(state, provider, { expirationTtl: 600 })
+  await c.env.OAUTH_STATES.put(state, String(provider), { expirationTtl: 600 })
 
   const workerUrl = c.env.WORKER_URL || `https://${c.req.header('host')}`
   const redirectUri = `${workerUrl}/api/oauth/${provider}/callback`
