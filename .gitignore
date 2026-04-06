@@ -3,4 +3,5 @@
 .env.*
 .wrangler/
 node_modules/.wrangler/
+node_modules/
 .dev.vars
